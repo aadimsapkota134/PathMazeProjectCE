@@ -276,12 +276,13 @@ QChart* GridView::createChart()
 
     // Set Marker color
     //freeElements    ->setColor(QColorConstants::White);
-    obstacleElements->setColor(QColorConstants::Black);
-    visitedElements ->setColor(QColorConstants::DarkGreen);
-    nextElements    ->setColor(QColorConstants::DarkYellow);
-    pathElements    ->setColor(QColorConstants::Red);
-    startElement    ->setColor(QColorConstants::DarkBlue);
-    endElement      ->setColor(QColorConstants::DarkRed);
+    obstacleElements->setColor(QColor("#1e272e"));      // Obstacle - charcoal black
+    visitedElements ->setColor(QColor("#34ace0"));      // Visited - cyan blue
+    nextElements    ->setColor(QColor("#ffb142"));      // Next - golden orange
+    pathElements    ->setColor(QColor("#ff5252"));      // Path - strong pink-red
+    startElement    ->setColor(QColor("#0be881"));      // Start - neon green
+    endElement      ->setColor(QColor("#ff3f34"));      // End - scarlet red
+
 
     // Set opacity
     freeElements    ->setOpacity(qreal(0.2));
@@ -333,8 +334,12 @@ QChart* GridView::createChart()
     QLinearGradient backgroundGradient;
     backgroundGradient.setStart(QPointF(0, 0));
     backgroundGradient.setFinalStop(QPointF(0, 1));
-    backgroundGradient.setColorAt(0.0, QRgb(0xd2d0d1));
-    backgroundGradient.setColorAt(1.0, QRgb(0x4c4547));
+    backgroundGradient.setColorAt(0.0, QRgb(0xa8edea));  // Mint
+    backgroundGradient.setColorAt(1.0, QRgb(0xfed6e3));  // Pale pink
+
+
+
+
     backgroundGradient.setCoordinateMode(QGradient::ObjectBoundingMode);
     chart->setBackgroundBrush(backgroundGradient);
 
