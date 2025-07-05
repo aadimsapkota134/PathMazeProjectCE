@@ -46,6 +46,11 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     int speed = ui->speedSpinBox->maximum() / 5;
     ui->speedSpinBox->setValue  (speed);
 
+    // Initial state for the run button
+    ui->runButton->setChecked(false); // Ensure it starts in the "play" state
+    ui->runButton->setText(QString("Start PathFinding")); // Initial text
+
+
     // Setting up the chart view
     setupGridView("gridView");
 
@@ -119,38 +124,39 @@ void MainWindow::on_runButton_clicked()
 {
     if (ui->algorithmsBox->currentIndex() == -1){
         QMessageBox::information(this, "Information", "Please select a path finding algorithm");
-
-    }else if (pathAlgorithm.simulationOnGoing){
-
+        // Reset button state if no algorithm is selected
+        ui->runButton->setChecked(false);
+        ui->runButton->setText(QString("Start PathFinding")); // Consistent initial text
+    } else if (pathAlgorithm.simulationOnGoing){ // If simulation has been started before (running or paused)
         if (pathAlgorithm.running){
+            // Algorithm is currently running, so pause it
             pathAlgorithm.pauseAlgorithm();
             gridView.setSimulationRunning(false);
+            pathAlgorithm.running = false; // Explicitly set running to false
             ui->runButton->setChecked(false);
-            ui->runButton->setText(QString("RUN"));
-
-        }else{
+            ui->runButton->setText(QString("Resume PathFinding")); // Indicate it's paused
+        } else {
+            // Algorithm is paused, so resume it
             pathAlgorithm.resumeAlgorithm();
             gridView.setSimulationRunning(true);
-
+            pathAlgorithm.running = true; // Explicitly set running to true
             ui->runButton->setChecked(true);
-            //ui->runButton->setText(QString("PAUSE"));
-            ui->runButton->setText(QString("RUNNING"));
+            ui->runButton->setText(QString("Pause PathFinding")); // Indicate it's running
         }
-
-    }else{
-
+    } else {
+        // This is the initial start of the pathfinding algorithm
         pathAlgorithm.running = true;
+        pathAlgorithm.simulationOnGoing = true; // CRUCIAL: Set this to true on initial start
 
         // set the grid node of the path algorithm object;
         pathAlgorithm.gridNodes = gridView.gridNodes;
         pathAlgorithm.heightGrid = gridView.heightGrid;
         pathAlgorithm.widthGrid = gridView.widthGrid;
 
-        // Setting the run button as checkble and checked
+        // Setting the run button as checkable and checked (setCheckable should ideally be in UI XML or constructor)
         ui->runButton->setCheckable(true);
-        ui->runButton->setChecked(true);
-        //ui->runButton->setText(QString("PAUSE"));
-        ui->runButton->setText(QString("RUNNING"));
+        ui->runButton->setChecked(true); // Set to checked for "pause" icon/state
+        ui->runButton->setText(QString("Pause PathFinding")); // Indicate it's running
 
         // Blocking the interaction with the gridView
         gridView.setSimulationRunning(true);
@@ -160,15 +166,14 @@ void MainWindow::on_runButton_clicked()
 
         // Call path finding
         pathAlgorithm.runAlgorithm(gridView.getCurrentAlgorithm());
-
     }
-
 }
 
 void MainWindow::on_mazeButton_clicked()
 {
     gridView.setCurrentAlgorithm(BACKTRACK);
     pathAlgorithm.running = true;
+    pathAlgorithm.simulationOnGoing = true; // Set to true for maze generation too
 
     // set the grid node of the path algorithm object;
     pathAlgorithm.gridNodes = gridView.gridNodes;
@@ -183,7 +188,6 @@ void MainWindow::on_mazeButton_clicked()
 
     // Call path finding
     pathAlgorithm.runAlgorithm(gridView.getCurrentAlgorithm());
-
 }
 
 void MainWindow::on_resetButton_clicked()
@@ -191,6 +195,12 @@ void MainWindow::on_resetButton_clicked()
     // Calling populate grid with same previous arrangement
     gridView.populateGridMap(gridView.getCurrentArrangement(), true);
 
+    // Reset pathfinding flags and button state on reset
+    pathAlgorithm.running = false;
+    pathAlgorithm.simulationOnGoing = false;
+    ui->runButton->setChecked(false);
+    ui->runButton->setText(QString("Start PathFinding"));
+    gridView.setSimulationRunning(false); // Ensure grid interaction is re-enabled
 }
 
 void MainWindow::on_interactionBox_currentIndexChanged(int index)
@@ -211,8 +221,9 @@ void MainWindow::onAlgorithmCompleted()
 {
     gridView.setSimulationRunning(false);
     pathAlgorithm.setSimulationOnGoing(false);
+    pathAlgorithm.running = false; // Ensure running flag is false on completion
     ui->runButton->setChecked(false);
-    ui->runButton->setText(QString("RUN"));
+    ui->runButton->setText(QString("Start PathFinding")); // Consistent initial text
 
     gridView.setCurrentAlgorithm(ui->algorithmsBox->currentIndex());
 }
