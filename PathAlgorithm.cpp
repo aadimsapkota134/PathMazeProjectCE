@@ -162,18 +162,20 @@ void PathAlgorithm::pauseAlgorithm()
 
 void PathAlgorithm::stopAlgorithm()
 {
-    running = false;
+    running = false; // Ensure running flag is false on stop
     futureOutput.cancel();
 }
 
 // BFS Algorithm
 void PathAlgorithm::performBFSAlgorithm(QPromise<int>& promise)
 {
-
     // Allow to pause and stop the simulation (to debug)
     promise.suspendIfRequested();
-    if (promise.isCanceled())
+    if (promise.isCanceled()) {
+        for(Node& node: gridNodes.Nodes)    {   node.visited = false; node.nextUp = false;   }
+        emit algorithmCompleted();
         return;
+    }
 
     // Reach the goal
     bool reachEnd = false;
@@ -205,6 +207,16 @@ void PathAlgorithm::performBFSAlgorithm(QPromise<int>& promise)
 
     while(!nextNodes.empty())
     {
+        // Add responsive pausing and cancellation check
+        for (int i = 0; i < speedVisualization; ++i) {
+            promise.suspendIfRequested();
+            if (promise.isCanceled()) {
+                for(Node& node: gridNodes.Nodes)    {   node.visited = false; node.nextUp = false;   }
+                emit algorithmCompleted();
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Small sleep to yield CPU
+        }
 
         // Current Node
         currentNode =  nextNodes.front(); nextNodes.pop();
@@ -258,10 +270,6 @@ void PathAlgorithm::performBFSAlgorithm(QPromise<int>& promise)
 
             // This node has been visited
             nodesLeftInCurrentLayer--;
-
-            // Time and checking for stop from running button
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
-
         }
 
         // if all nodes in the current layer have been checked
@@ -297,8 +305,15 @@ void PathAlgorithm::performBFSAlgorithm(QPromise<int>& promise)
 
             // Updating the GridView with PATH
             emit updatedScatterGridView(PATH, reverseIndex);
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
-
+            for (int i = 0; i < speedVisualization; ++i) {
+                promise.suspendIfRequested();
+                if (promise.isCanceled()) {
+                    for(Node& node: gridNodes.Nodes)    {   node.visited = false; node.nextUp = false;   }
+                    emit algorithmCompleted();
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
 
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
@@ -307,6 +322,9 @@ void PathAlgorithm::performBFSAlgorithm(QPromise<int>& promise)
     }else{
         endReached = false;
     }
+
+    // We need to reset the visited property to use in the other Algorithms
+    for(Node& node: gridNodes.Nodes)    {   node.visited = false; node.nextUp = false;   } // Also reset nextUp for BFS/DFS
 
     emit algorithmCompleted();
 
@@ -318,8 +336,11 @@ void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
 
     // Allow to pause and stop the simulation (to debug)
     promise.suspendIfRequested();
-    if (promise.isCanceled())
+    if (promise.isCanceled()){
+        for(Node& node: gridNodes.Nodes)    {   node.visited = false; node.nextUp = false;   }
+        emit algorithmCompleted();
         return;
+    }
 
     // Reach the goal
     bool reachEnd = false;
@@ -348,6 +369,17 @@ void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
     bool addingPoint = true;
     while(!nextNodes.empty())
     {
+        // Add responsive pausing and cancellation check
+        for (int i = 0; i < speedVisualization; ++i) {
+            promise.suspendIfRequested();
+            if (promise.isCanceled()) {
+                for(Node& node: gridNodes.Nodes)    {   node.visited = false; node.nextUp = false;   }
+                emit algorithmCompleted();
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+
         // Current Node
         currentNode =  nextNodes.top(); nextNodes.pop();
         int currentIndex = coordToIndex(currentNode.xCoord, currentNode.yCoord, widthGrid);
@@ -400,10 +432,6 @@ void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
 
             // This node has been visited
             nodesLeftInCurrentLayer--;
-
-            // Time and checking for stop from running button
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
-
         }
 
         // if all nodes in the current layer have been checked
@@ -442,13 +470,24 @@ void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
             emit updatedScatterGridView(PATH, reverseIndex);
             reverse = parentNode;
             count++;
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            for (int i = 0; i < speedVisualization; ++i) {
+                promise.suspendIfRequested();
+                if (promise.isCanceled()) {
+                    for(Node& node: gridNodes.Nodes)    {   node.visited = false; node.nextUp = false;   }
+                    emit algorithmCompleted();
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
     }else{
         endReached = false;
     }
+
+    // We need to reset the visited property to use in the other Algorithms
+    for(Node& node: gridNodes.Nodes)    {   node.visited = false; node.nextUp = false;   } // Also reset nextUp for BFS/DFS
 
     emit algorithmCompleted();
 
@@ -459,8 +498,11 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
 {
     // Allow to pause and stop the simulation (to debug)
     promise.suspendIfRequested();
-    if (promise.isCanceled())
+    if (promise.isCanceled()){
+        for(Node& node: gridNodes.Nodes)    {   node.visited = false;   }
+        emit algorithmCompleted();
         return;
+    }
 
     // Create connections for each node
     for(Node& node: gridNodes.Nodes)
@@ -493,6 +535,16 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
 
     while(!nodesToTest.empty())
     {
+        // Add responsive pausing and cancellation check
+        for (int i = 0; i < speedVisualization; ++i) {
+            promise.suspendIfRequested();
+            if (promise.isCanceled()) {
+                for(Node& node: gridNodes.Nodes)    {   node.visited = false;   }
+                emit algorithmCompleted();
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
 
         // Sorting untested nodes by global goal
         nodesToTest.sort([](const Node* a, const Node* b){return a->localGoal < b->localGoal;});
@@ -510,9 +562,6 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
         // Updating the gridview
         int indexCurrent = coordToIndex(nodeCurrent->xCoord, nodeCurrent->yCoord, widthGrid);
         emit updatedScatterGridView(VISIT, indexCurrent);
-
-        // Time and checking for stop from running button
-        std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
         // Checking each neighbours
         for (Node* nodeNeighbour: nodeCurrent->neighbours)
@@ -564,6 +613,15 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
 
         while(reverseNode->parent != nullptr)
         {
+            for (int i = 0; i < speedVisualization; ++i) {
+                promise.suspendIfRequested();
+                if (promise.isCanceled()) {
+                    for(Node& node: gridNodes.Nodes)    {   node.visited = false;   }
+                    emit algorithmCompleted();
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
 
             reverseNode = reverseNode->parent;
             int reverseIndex = coordToIndex(reverseNode->xCoord, reverseNode->yCoord, widthGrid);
@@ -571,15 +629,15 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
             // Update the gridView
             emit updatedScatterGridView(PATH, reverseIndex);
             emit updatedLineGridView(QPointF(reverseNode->xCoord, reverseNode->yCoord), true, false);
-
-            // Time and checking for stop from running button
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
     }else{
-        endReached = -1;
+        endReached = false; // Corrected from -1
     }
+
+    // We need to reset the visited property to use in the other Algorithms
+    for(Node& node: gridNodes.Nodes)    {   node.visited = false;   }
 
     emit algorithmCompleted();
 }
@@ -588,8 +646,11 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
 
     // Allow to pause and stop the simulation (to debug)
     promise.suspendIfRequested();
-    if (promise.isCanceled())
+    if (promise.isCanceled()){
+        for(Node& node: gridNodes.Nodes)    {   node.visited = false;   }
+        emit algorithmCompleted();
         return;
+    }
 
     // Create connections for each node
     for(Node& node: gridNodes.Nodes)
@@ -629,6 +690,17 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
 
     while(!nodesToTest.empty())
     {
+        // Add responsive pausing and cancellation check
+        for (int i = 0; i < speedVisualization; ++i) {
+            promise.suspendIfRequested();
+            if (promise.isCanceled()) {
+                for(Node& node: gridNodes.Nodes)    {   node.visited = false;   }
+                emit algorithmCompleted();
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+
         // Sorting untested nodes by global goal
         nodesToTest.sort([](const Node* a, const Node* b){return a->globalGoal < b->globalGoal;});
 
@@ -645,9 +717,6 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
         // Updating the gridview
         int indexCurrent = coordToIndex(nodeCurrent->xCoord, nodeCurrent->yCoord, widthGrid);
         emit updatedScatterGridView(VISIT, indexCurrent);
-
-        // Time and checking for stop from running button
-        std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
         // Checking each neighbours
         for (Node* nodeNeighbour: nodeCurrent->neighbours)
@@ -699,22 +768,30 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
         emit updatedLineGridView(QPointF(reverseNode->xCoord, reverseNode->yCoord), true, true);
         while(reverseNode->parent != nullptr)
         {
+            for (int i = 0; i < speedVisualization; ++i) {
+                promise.suspendIfRequested();
+                if (promise.isCanceled()) {
+                    for(Node& node: gridNodes.Nodes)    {   node.visited = false;   }
+                    emit algorithmCompleted();
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
             reverseNode = reverseNode->parent;
             int reverseIndex = coordToIndex(reverseNode->xCoord, reverseNode->yCoord, widthGrid);
 
             // Update the gridView
             emit updatedScatterGridView(PATH, reverseIndex);
             emit updatedLineGridView(QPointF(reverseNode->xCoord, reverseNode->yCoord), true, false);
-
-
-            // Time and checking for stop from running button
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
     }else{
-        endReached = -1;
+        endReached = false; // Corrected from -1
     }
+
+    // We need to reset the visited property to use in the other Algorithms
+    for(Node& node: gridNodes.Nodes)    {   node.visited = false;   }
 
     emit algorithmCompleted();
 }
