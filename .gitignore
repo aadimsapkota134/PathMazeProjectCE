@@ -39,3 +39,7 @@
 
 # debug information files
 *.dwo
+
+# pro file
+*.pro.user
+
