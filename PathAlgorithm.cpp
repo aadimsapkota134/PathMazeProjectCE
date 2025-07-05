@@ -260,7 +260,7 @@ void PathAlgorithm::performBFSAlgorithm(QPromise<int>& promise)
             nodesLeftInCurrentLayer--;
 
             // Time and checking for stop from running button
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
         }
 
@@ -297,7 +297,7 @@ void PathAlgorithm::performBFSAlgorithm(QPromise<int>& promise)
 
             // Updating the GridView with PATH
             emit updatedScatterGridView(PATH, reverseIndex);
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
         }
 
@@ -402,7 +402,7 @@ void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
             nodesLeftInCurrentLayer--;
 
             // Time and checking for stop from running button
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
         }
 
@@ -442,7 +442,7 @@ void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
             emit updatedScatterGridView(PATH, reverseIndex);
             reverse = parentNode;
             count++;
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
@@ -512,7 +512,7 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
         emit updatedScatterGridView(VISIT, indexCurrent);
 
         // Time and checking for stop from running button
-        std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
         // Checking each neighbours
         for (Node* nodeNeighbour: nodeCurrent->neighbours)
@@ -573,7 +573,7 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
             emit updatedLineGridView(QPointF(reverseNode->xCoord, reverseNode->yCoord), true, false);
 
             // Time and checking for stop from running button
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
@@ -647,7 +647,7 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
         emit updatedScatterGridView(VISIT, indexCurrent);
 
         // Time and checking for stop from running button
-        std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
         // Checking each neighbours
         for (Node* nodeNeighbour: nodeCurrent->neighbours)
@@ -708,7 +708,7 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
 
 
             // Time and checking for stop from running button
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
@@ -752,7 +752,7 @@ void PathAlgorithm::performRecursiveBackTrackerAlgorithm(QPromise<int>& promise)
     int numberVisitedCells = 1;
 
     int offset = 2;
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     while(numberVisitedCells < widthGrid * heightGrid && !stackUnVisitedNodes.empty() ){
 
