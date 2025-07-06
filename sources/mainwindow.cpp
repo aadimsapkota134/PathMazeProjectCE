@@ -44,7 +44,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     // Initial Simulation speed
     ui->speedSpinBox->setMaximum(100);
-    int speed = ui->speedSpinBox->maximum() / 10;
+    int speed = ui->speedSpinBox->maximum() / 5;
     ui->speedSpinBox->setValue  (speed);
 
     // Initial state for the run button
@@ -67,18 +67,20 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     // Connecting the end signal of path planning to the window
     connect(&pathAlgorithm, &PathAlgorithm::algorithmCompleted, this, &MainWindow::onAlgorithmCompleted);
-
+    // NEW: Connect signal for pathfinding search completion (for timer stop)
+    connect(&pathAlgorithm, &PathAlgorithm::pathfindingSearchCompleted, this, &MainWindow::onPathfindingSearchCompleted);
     // --- Timer Setup ---
     animationTimer = new QTimer(this); // Initialize the QTimer
     // Connect the timer's timeout signal to our new slot for updating the display
     connect(animationTimer, &QTimer::timeout, this, &MainWindow::updateElapsedTime);
-    animationTimer->setInterval(100); // Set update frequency to every 100 milliseconds (0.1 seconds)
+    animationTimer->setInterval(10); // Set update frequency to every 10 milliseconds (0.01 seconds)
 
     // Initialize the QLabel for time display
     timeDisplayLabel = new QLabel("Time: 0.000 s", this);
     timeDisplayLabel->setAlignment(Qt::AlignCenter);
     timeDisplayLabel->setStyleSheet("font-weight: bold; color: #34ace0;"); // Styling for visibility
     ui->hLayout->addWidget(timeDisplayLabel); // Add the label to your existing horizontal layout
+    pausedTimeOffset = 0; //initialize paused time offset
 
 }
 
@@ -151,7 +153,8 @@ void MainWindow::on_runButton_clicked()
             pathAlgorithm.running = false; // Explicitly set running to false
             ui->runButton->setChecked(false);
             ui->runButton->setText(QString("Resume PathFinding")); // Indicate it's paused
-            animationTimer->stop();
+            animationTimer->stop(); //stop the display timer
+            pausedTimeOffset += elapsedTimer.elapsed(); //accumulate the elapsed time
         } else {
             // Algorithm is paused, so resume it
             pathAlgorithm.resumeAlgorithm();
@@ -159,6 +162,7 @@ void MainWindow::on_runButton_clicked()
             pathAlgorithm.running = true; // Explicitly set running to true
             ui->runButton->setChecked(true);
             ui->runButton->setText(QString("Pause PathFinding")); // Indicate it's running
+            elapsedTimer.restart(); //Restart elapsed timer for new segment
             animationTimer->start();
         }
     } else {
@@ -181,9 +185,12 @@ void MainWindow::on_runButton_clicked()
 
         // Enabling the current QScatter series point as visible
         gridView.AlgorithmView(true);
+        pausedTimeOffset = 0; // Reset offset for a new run
         // Start the elapsed timer
+
         elapsedTimer.start();
         animationTimer->start(); // Start the animation timer
+
 
         // Call path finding
         pathAlgorithm.runAlgorithm(gridView.getCurrentAlgorithm());
@@ -207,9 +214,7 @@ void MainWindow::on_mazeButton_clicked()
     // Enabling the current QScatter series point as visible
     gridView.AlgorithmView(true);
 
-    // Start the elapsed timer for maze generation
-    elapsedTimer.start();
-    animationTimer->start(); // Start the animation timer
+
 
     // Call path finding
     pathAlgorithm.runAlgorithm(gridView.getCurrentAlgorithm());
@@ -230,6 +235,7 @@ void MainWindow::on_resetButton_clicked()
     // Stop timers and reset display
     animationTimer->stop(); // <-- This line stops the timer
     timeDisplayLabel->setText("Time: 0.000 s"); // <-- This line resets the displayed text
+    pausedTimeOffset = 0;
 }
 
 void MainWindow::on_interactionBox_currentIndexChanged(int index)
@@ -259,10 +265,14 @@ void MainWindow::onAlgorithmCompleted()
 
     gridView.setCurrentAlgorithm(ui->algorithmsBox->currentIndex());
 
-    // Stop the timer and display final elapsed time
-    animationTimer->stop();
-    qint64 elapsed = elapsedTimer.elapsed(); // Get final elapsed time in milliseconds
-    timeDisplayLabel->setText(QString("Time: %1 s").arg(elapsed / 1000.0, 0, 'f', 3)); // Display in seconds with 3 decimal places
+
+}
+// NEW: Slot to handle when the pathfinding search itself completes
+void MainWindow::onPathfindingSearchCompleted() // <--- NEW SLOT IMPLEMENTATION
+{
+    animationTimer->stop(); // Stop the timer display
+    qint64 finalElapsedTime = pausedTimeOffset + elapsedTimer.elapsed(); // Calculate total time
+    timeDisplayLabel->setText(QString("Time: %1 s").arg(finalElapsedTime / 1000.0, 0, 'f', 3));
 }
 
 void MainWindow::on_dialWidth_valueChanged(int value)
@@ -327,6 +337,6 @@ void MainWindow::on_speedSpinBox_valueChanged(int arg1)
 }
 void MainWindow::updateElapsedTime()
 {
-    qint64 elapsed = elapsedTimer.elapsed(); // Get elapsed time in milliseconds
+    qint64 elapsed = pausedTimeOffset + elapsedTimer.elapsed(); // Get elapsed time in milliseconds
     timeDisplayLabel->setText(QString("Time: %1 s").arg(elapsed / 1000.0, 0, 'f', 3)); // Display in seconds with 3 decimal places
 }
