@@ -2,8 +2,11 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QTimer>         // Add this
+#include <QElapsedTimer>  // Add this
 #include "GridView.h"
 #include "PathAlgorithm.h"
+#include "qlabel.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -59,6 +62,9 @@ public slots:
     // Action to do when the path algorithm is finished
     void onAlgorithmCompleted();
 
+    // Action to do when the pathfinding search completes (before visualization)
+    void onPathfindingSearchCompleted();
+
 private slots:
     void on_dialWidth_valueChanged(int value);
 
@@ -76,11 +82,18 @@ private slots:
 
     void on_speedSpinBox_valueChanged(int arg1);
 
+    void updateElapsedTime(); // New slot for timer updates
+
 private:
 
     Ui::MainWindow* ui;
     GridView gridView;
     PathAlgorithm pathAlgorithm;
+    QTimer* animationTimer;        // Declare QTimer
+    QElapsedTimer elapsedTimer;    // Declare QElapsedTimer
+    QLabel* timeDisplayLabel;   // Declare QLabel for time display
+
+    qint64 pausedTimeOffset; // NEW: Stores time accumulated before pausing
 
 };
 #endif // MAINWINDOW_H
