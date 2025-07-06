@@ -54,7 +54,8 @@ public: Q_SIGNALS:
     void updatedScatterGridView (UPDATETYPES VISIT,     int currentIndex);
     void updatedLineGridView    (QPointF currentPoint,  bool addingPoint,   bool clearPriorToUpdate=false);
 
-    void algorithmCompleted();
+    void algorithmCompleted(); // Emitted after visualization (e.g., for maze)
+    void pathfindingSearchCompleted(); // <--- NEW SIGNAL: Emitted when path is found, before visualization
 
 public:
 
