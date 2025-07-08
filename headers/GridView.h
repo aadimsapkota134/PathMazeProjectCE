@@ -125,6 +125,11 @@ public:
     // Modifying View
     void setElementsMarkerSize();
 
+    //Function to get the path length from the pathLine series
+    int getPathLength() const;
+public:
+    // Add this new function declaration:
+    void setupNodes();
 public Q_SLOTS:
 
     // Event handleClickedPoint
