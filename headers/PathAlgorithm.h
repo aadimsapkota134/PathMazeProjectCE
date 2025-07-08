@@ -55,7 +55,7 @@ public: Q_SIGNALS:
     void updatedLineGridView    (QPointF currentPoint,  bool addingPoint,   bool clearPriorToUpdate=false);
 
     void algorithmCompleted(); // Emitted after visualization (e.g., for maze)
-    void pathfindingSearchCompleted(); // <--- NEW SIGNAL: Emitted when path is found, before visualization
+    void pathfindingSearchCompleted(int nodesVisited, int pathLength); // <--- NEW SIGNAL: Emitted when path is found, before visualization
 
 public:
 
@@ -73,7 +73,11 @@ public:
     // Multithreading
     QThreadPool pool;
     QFuture<int> futureOutput;
-
+public:
+   QString algorithmToString(ALGOS algo);
+public:
+    //  new method to update to grids:
+    void setGridNodes(const grid& newGridNodes, int width, int height);
 };
 
 #endif // PATHALGORITHM_H
