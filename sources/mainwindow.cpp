@@ -1,7 +1,7 @@
 #include <iostream>
 #include <QChartView>
 #include <QMessageBox>
-#include <QLabel>         // Include QLabel
+#include <QLabel>         
 #include <QTime>
 #include "mainWindow.h"
 #include "ui_mainWindow.h"
@@ -61,6 +61,9 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     // Setting up the Algorithms Combo Box
     setupAlgorithmsComboBox();
 
+    // Setup the comparison table
+    setupComparisonTable();
+
     // A change in the grid view create a change in the chartview
     connect(&pathAlgorithm, &PathAlgorithm::updatedScatterGridView, &gridView, &GridView::handleUpdatedScatterGridView);
     connect(&pathAlgorithm, &PathAlgorithm::updatedLineGridView,    &gridView, &GridView::handleUpdatedLineGridView);
@@ -82,6 +85,12 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     ui->hLayout->addWidget(timeDisplayLabel); // Add the label to your existing horizontal layout
     pausedTimeOffset = 0; //initialize paused time offset
 
+    // NEW: Connect the clear comparison button
+    connect(ui->clearComparisonButton, &QPushButton::clicked, this, &MainWindow::on_clearComparisonButton_clicked);
+
+    QPushButton* deleteRowButton = new QPushButton("Delete Selected Row", this);
+    ui->verticalLayout_2->addWidget(deleteRowButton); // Add to the comparisonTab's vertical layout
+    connect(deleteRowButton, &QPushButton::clicked, this, &MainWindow::on_deleteSelectedRowButton_clicked);
 }
 
 MainWindow::~MainWindow()
@@ -127,10 +136,37 @@ void MainWindow::setupGridView(QString gridViewName)
     ui->gridView->setObjectName(gridViewName);
     ui->gridView->setMinimumWidth(qreal(700));
     ui->gridView->setMinimumHeight(qreal(700));
+    // Setup nodes in GridView
+    gridView.setupNodes(); // This creates and populates gridView.gridNodes.Nodes
 
+    // CRITICAL: Now pass the updated grid data and dimensions to PathAlgorithm
+    pathAlgorithm.setGridNodes(gridView.gridNodes, gridView.widthGrid, gridView.heightGrid);
+    // This is crucial for a clean visualization when grid changes
+    gridView.chart->removeAllSeries();
+    gridView.chart->addSeries(gridView.freeElements);
+    gridView.chart->addSeries(gridView.obstacleElements);
+    gridView.chart->addSeries(gridView.visitedElements);
+    gridView.chart->addSeries(gridView.nextElements);
+    gridView.chart->addSeries(gridView.pathElements);
+    gridView.chart->addSeries(gridView.pathLine);
+    gridView.chart->addSeries(gridView.startElement);
+    gridView.chart->addSeries(gridView.endElement);
     // Create Chart in chartview
     QChart* chart = gridView.createChart();
     ui->gridView->setChart(chart);
+
+}
+
+// Setup the comparison table
+void MainWindow::setupComparisonTable()
+{
+    ui->comparisonTable->setColumnCount(5); // Algorithm, Time, Nodes Visited, Path Length, Grid Size
+    QStringList headers;
+    headers << "Algorithm" << "Time (s)" << "Nodes Visited" << "Path Length" << "Grid Size";
+    ui->comparisonTable->setHorizontalHeaderLabels(headers);
+    ui->comparisonTable->horizontalHeader()->setStretchLastSection(true);
+    ui->comparisonTable->setSelectionBehavior(QAbstractItemView::SelectRows); // Select entire rows
+    ui->comparisonTable->setSelectionMode(QAbstractItemView::SingleSelection); // Allow single row selection
 }
 
 GridView& MainWindow::getGridView()
@@ -140,6 +176,7 @@ GridView& MainWindow::getGridView()
 
 void MainWindow::on_runButton_clicked()
 {
+    qDebug() << "DEBUG: on_runButton_clicked() entered.";
     if (ui->algorithmsBox->currentIndex() == -1){
         QMessageBox::information(this, "Information", "Please select a path finding algorithm");
         // Reset button state if no algorithm is selected
@@ -147,6 +184,7 @@ void MainWindow::on_runButton_clicked()
         ui->runButton->setText(QString("Start PathFinding")); // Consistent initial text
     } else if (pathAlgorithm.simulationOnGoing){ // If simulation has been started before (running or paused)
         if (pathAlgorithm.running){
+            qDebug() << "DEBUG: Run button: Simulation is ongoing, handling pause/resume.";
             // Algorithm is currently running, so pause it
             pathAlgorithm.pauseAlgorithm();
             gridView.setSimulationRunning(false);
@@ -168,7 +206,7 @@ void MainWindow::on_runButton_clicked()
     } else {
         // This is the initial start of the pathfinding algorithm
         pathAlgorithm.running = true;
-        pathAlgorithm.simulationOnGoing = true; // CRUCIAL: Set this to true on initial start
+        pathAlgorithm.simulationOnGoing = true; //Set this to true on initial start
 
         // set the grid node of the path algorithm object;
         pathAlgorithm.gridNodes = gridView.gridNodes;
@@ -193,7 +231,7 @@ void MainWindow::on_runButton_clicked()
 
 
         // Call path finding
-        pathAlgorithm.runAlgorithm(gridView.getCurrentAlgorithm());
+        pathAlgorithm.runAlgorithm(pathAlgorithm.getCurrentAlgorithm());
     }
 }
 
@@ -231,6 +269,23 @@ void MainWindow::on_resetButton_clicked()
     ui->runButton->setChecked(false);
     ui->runButton->setText(QString("Start PathFinding"));
     gridView.setSimulationRunning(false); // Ensure grid interaction is re-enabled
+    // Reset interaction to NOINTERACTION
+    gridView.setCurrentInteraction(NOINTERACTION);
+    ui->interactionBox->setCurrentIndex(-1);
+    // Reset algorithm selection to NOALGO internally
+    pathAlgorithm.setCurrentAlgorithm(NOALGO);
+
+    // Update the UI's algorithm selection combobox
+    // Assuming NOALGO corresponds to no selection or a specific "None" item.
+    // If you have a "None" or "No Algorithm" item in your algorithmsBox,
+    // find its index and set it. Otherwise, setting to -1 usually deselects.
+    ui->algorithmsBox->setCurrentIndex(-1); // Deselects any algorithm in the combobox
+
+    // Reset button text for run button
+    ui->runButton->setText("Start PathFinding");
+
+
+
 
     // Stop timers and reset display
     animationTimer->stop(); // <-- This line stops the timer
@@ -252,6 +307,7 @@ void MainWindow::on_algorithmsBox_currentIndexChanged(int index)
 {
     // Changing the current Algorithm
     gridView.setCurrentAlgorithm(index);
+    pathAlgorithm.setCurrentAlgorithm(static_cast<ALGOS>(index));
 }
 
 
@@ -263,21 +319,46 @@ void MainWindow::onAlgorithmCompleted()
     ui->runButton->setChecked(false);
     ui->runButton->setText(QString("Start PathFinding")); // Consistent initial text
 
-    gridView.setCurrentAlgorithm(ui->algorithmsBox->currentIndex());
+   // gridView.setCurrentAlgorithm(ui->algorithmsBox->currentIndex());
 
 
 }
 // NEW: Slot to handle when the pathfinding search itself completes
-void MainWindow::onPathfindingSearchCompleted() // <--- NEW SLOT IMPLEMENTATION
+void MainWindow::onPathfindingSearchCompleted(int nodesVisited, int pathLength) // <--- NEW SLOT IMPLEMENTATION
 {
     animationTimer->stop(); // Stop the timer display
     qint64 finalElapsedTime = pausedTimeOffset + elapsedTimer.elapsed(); // Calculate total time
     timeDisplayLabel->setText(QString("Time: %1 s").arg(finalElapsedTime / 1000.0, 0, 'f', 3));
+
+    // Only add to comparison table if it was a pathfinding algorithm, not maze generation
+    if (gridView.getCurrentAlgorithm() != BACKTRACK) {
+        AlgorithmComparisonData data;
+        data.algorithmName = ui->algorithmsBox->currentText();
+        data.timeElapsedMs = finalElapsedTime;
+        data.nodesVisited = nodesVisited;
+        data.pathLength = pathLength;
+        data.gridSize = QString("%1x%2").arg(gridView.widthGrid).arg(gridView.heightGrid);
+        comparisonDataList.append(data);
+        qDebug() << "Data added to comparison list.";
+
+        // Add data to the QTableWidget
+        int row = ui->comparisonTable->rowCount();
+        ui->comparisonTable->insertRow(row);
+
+        ui->comparisonTable->setItem(row, 0, new QTableWidgetItem(data.algorithmName));
+        ui->comparisonTable->setItem(row, 1, new QTableWidgetItem(QString::number(data.timeElapsedMs / 1000.0, 'f', 3)));
+        ui->comparisonTable->setItem(row, 2, new QTableWidgetItem(QString::number(data.nodesVisited)));
+        ui->comparisonTable->setItem(row, 3, new QTableWidgetItem(QString::number(data.pathLength)));
+        ui->comparisonTable->setItem(row, 4, new QTableWidgetItem(data.gridSize));
+
+        qDebug() << "Data displayed in table.";
+    }
 }
 
 void MainWindow::on_dialWidth_valueChanged(int value)
 {
     ui->lcdWidth->display(value);
+
 }
 
 
@@ -327,7 +408,7 @@ void MainWindow::on_dialHeight_sliderReleased()
 
 void MainWindow::on_mazeButton_released()
 {
-
+// The main logic for maze generation is in on_mazeButton_clicked().
 }
 
 
@@ -339,4 +420,30 @@ void MainWindow::updateElapsedTime()
 {
     qint64 elapsed = pausedTimeOffset + elapsedTimer.elapsed(); // Get elapsed time in milliseconds
     timeDisplayLabel->setText(QString("Time: %1 s").arg(elapsed / 1000.0, 0, 'f', 3)); // Display in seconds with 3 decimal places
+}
+
+// NEW: Slot to clear all comparison data
+void MainWindow::on_clearComparisonButton_clicked()
+{
+    comparisonDataList.clear(); // Clear the internal list
+    ui->comparisonTable->setRowCount(0); // Clear the table widget rows
+    QMessageBox::information(this, "Comparison Table", "All comparison data cleared.");
+}
+
+ Slot to delete a selected row
+void MainWindow::on_deleteSelectedRowButton_clicked()
+{
+    QModelIndexList selectedRows = ui->comparisonTable->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty()) {
+        QMessageBox::information(this, "Delete Row", "Please select a row to delete.");
+        return;
+    }
+
+    // Iterate in reverse order to avoid issues with changing row indices
+    for (int i = selectedRows.count() - 1; i >= 0; --i) {
+        int rowToDelete = selectedRows.at(i).row();
+        ui->comparisonTable->removeRow(rowToDelete);
+        comparisonDataList.removeAt(rowToDelete); // Also remove from internal data list
+    }
+    QMessageBox::information(this, "Delete Row", "Selected row(s) deleted.");
 }
