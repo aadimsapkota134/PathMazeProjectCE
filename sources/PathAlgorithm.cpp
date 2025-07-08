@@ -54,6 +54,22 @@ void PathAlgorithm::setSimulationOnGoing(bool onGoing)
 {
     this->simulationOnGoing = onGoing;
 }
+// Implement the new method:
+void PathAlgorithm::setGridNodes(const grid& newGridNodes, int width, int height)
+{
+    this->gridNodes = newGridNodes; // Copies the entire grid struct, including the Nodes vector and start/end indices
+    this->widthGrid = width;        // Update PathAlgorithm's internal width
+    this->heightGrid = height;      // Update PathAlgorithm's internal height
+    qDebug() << "PathAlgorithm: Internal grid dimensions updated to " << this->widthGrid << "x" << this->heightGrid;
+    qDebug() << "PathAlgorithm: Internal gridNodes.Nodes.size() is now: " << this->gridNodes.Nodes.size();
+    qDebug() << "PathAlgorithm: Internal startIndex: " << this->gridNodes.startIndex << ", endIndex: " << this->gridNodes.endIndex;
+
+    // IMPORTANT: Also reset the visited/nextUp flags on the new grid, just in case
+    for(Node& node: this->gridNodes.Nodes) {
+        node.visited = false;
+        node.nextUp = false;
+    }
+}
 
 std::vector<Node> PathAlgorithm::retrieveNeighborsGrid(const grid& gridNodes, const Node& currentNode, int widthGrid, int heightGrid)
 {
@@ -92,6 +108,17 @@ std::vector<Node> PathAlgorithm::retrieveNeighborsGrid(const grid& gridNodes, co
     return neighbors;
 }
 
+QString PathAlgorithm::algorithmToString(ALGOS algo) {
+    switch (algo) {
+    case BFS: return "BFS";
+    case DFS: return "DFS";
+    case DIJKSTRA: return "DIJKSTRA";
+    case ASTAR: return "ASTAR";
+    case BACKTRACK: return "BACKTRACK";
+    case NOALGO: return "NOALGO";
+    default: return "UNKNOWN_ALGO";
+    }
+}
 void PathAlgorithm::checkGridNode(grid gridNodes, int heightGrid, int widthGrid)
 {
     // Display grid
@@ -175,201 +202,192 @@ void PathAlgorithm::stopAlgorithm()
 }
 
 // BFS Algorithm
+// In PathAlgorithm.cpp
+
 void PathAlgorithm::performBFSAlgorithm(QPromise<int>& promise)
 {
     qDebug() << "BFS: Algorithm started in worker thread:" << QThread::currentThreadId();
 
-    // Allow to pause and stop the simulation (to debug)
     promise.suspendIfRequested();
-    if (promise.isCanceled())
+    if (promise.isCanceled()) {
+        // If cancelled before starting, emit with 0, 0
+        emit pathfindingSearchCompleted(0, 0);
         return;
+    }
 
-    // Reach the goal
     bool reachEnd = false;
-
-    // Initialize the queue of Nodes to visit in the next step
-    std::queue<Node> nextNodes;
-
-    // Initializing a vector of nodes (through copy of the original): to keep track of parents: index: index parent, value: Node child
-    std::vector<Node> parentNodes = gridNodes.Nodes;
-
-    // Initializing a vector of nodes (through copy of the original): to recreate the path: index: index parent, value: Node child
-    std::vector<Node> pathNodes = gridNodes.Nodes;
+    std::queue<Node*> nextNodesQueue; // Use Node* to avoid copying large Node objects
+    std::map<int, int> parentMap; // Map child index to parent index for path reconstruction
 
     // Starting point
-    nextNodes.push(gridNodes.Nodes[gridNodes.startIndex]);
+    Node* startNode = &(gridNodes.Nodes[gridNodes.startIndex]);
+    nextNodesQueue.push(startNode);
+    gridNodes.Nodes[gridNodes.startIndex].visited = true; // Mark start as visited immediately
+    parentMap[gridNodes.startIndex] = -1; // No parent for start node
 
-    // Keeping track of the number of nodes left to check in the next layer and in the current layer
-    int nodesInNextLayer = 0;
-    int nodesLeftInCurrentLayer =1 ;
+    int nodesVisitedCount = 0; // Counter for visited nodes
 
-    // Counting the optimal number of moves needed to go from start to finish
-    int moveCount {};
-
-    // Initialization current node
-    Node currentNode;
-
-    //
-    bool addingPoint = true;
-
-    while(!nextNodes.empty())
+    while(!nextNodesQueue.empty())
     {
-        qDebug() << "BFS: Before suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
-        promise.suspendIfRequested(); // Check for pause/resume within the loop
-        qDebug() << "BFS: After suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
+        promise.suspendIfRequested();
         if (promise.isCanceled()) {
             qDebug() << "BFS: Algorithm cancelled during loop.";
+            // Emit with current stats on cancel
+            emit pathfindingSearchCompleted(nodesVisitedCount, 0);
             return;
         }
 
-        // Current Node
-        currentNode =  nextNodes.front(); nextNodes.pop();
-        int currentIndex = coordToIndex(currentNode.xCoord, currentNode.yCoord, widthGrid);
+        Node* currentNode = nextNodesQueue.front();
+        nextNodesQueue.pop();
+        nodesVisitedCount++; // Increment when a node is dequeued and processed
 
-        // updating Line gridView
-        emit updatedLineGridView(QPointF(currentNode.xCoord, currentNode.yCoord), addingPoint);
-        addingPoint = false;
+        int currentIndex = coordToIndex(currentNode->xCoord, currentNode->yCoord, widthGrid);
 
+        // Update this node as visited in the gridView (if it's not the start/end and not already visited)
+        // The start node is already marked visited, so we don't need to re-emit for it here.
+        // For other nodes, we emit VISIT when we process them.
+        if (currentIndex != gridNodes.startIndex && currentIndex != gridNodes.endIndex) {
+            emit updatedScatterGridView(VISIT, currentIndex);
+        }
+
+        // Check if goal is reached
         if (currentIndex == gridNodes.endIndex)
         {
             std::cerr << "Reached end \n";
             reachEnd = true;
             break; // Path found, exit search loop
         }
+        // Note: retrieveNeighborsGrid returns copies...
 
-        if (currentNode.visited == false && currentNode.obstacle == false)
-        {
+        // Manual neighbor retrieval for BFS/DFS (more typical)
+        int dx[] = {0, 0, 1, -1}; // Up, Down, Right, Left
+        int dy[] = {1, -1, 0, 0};
 
-            // This node is now visited
-            currentNode.visited = true;
-            gridNodes.Nodes[currentIndex].visited = true;
+        for (int i = 0; i < 4; ++i) {
+            int neighborX = currentNode->xCoord + dx[i];
+            int neighborY = currentNode->yCoord + dy[i];
 
-            // Update this node as visited in the gridView
-            emit updatedScatterGridView(VISIT, currentIndex);
-
-            // Retrieve neighbors and pushing it to the next nodes to check
-            std::vector<Node> neighbors = retrieveNeighborsGrid(gridNodes, currentNode, widthGrid, heightGrid);
-
-            for (auto nextNode=neighbors.begin(); nextNode < neighbors.end(); nextNode++)
+            if (neighborX >= 1 && neighborX <= widthGrid &&
+                neighborY >= 1 && neighborY <= heightGrid)
             {
-                // Pushing the neighbors in the next nodes to be checked if the node has not been added in the nextNode before
-                if ((*nextNode).nextUp == false){
+                int neighborIndex = coordToIndex(neighborX, neighborY, widthGrid);
+                Node* neighborNode = &(gridNodes.Nodes[neighborIndex]);
 
-                    int nextIndex = coordToIndex((*nextNode).xCoord, (*nextNode).yCoord, widthGrid);
+                if (!neighborNode->visited && !neighborNode->obstacle) {
+                    neighborNode->visited = true; // Mark as visited when added to queue
+                    nextNodesQueue.push(neighborNode);
+                    parentMap[neighborIndex] = currentIndex; // Store parent
 
-                    gridNodes.Nodes[nextIndex].nextUp = true;
-                    nextNodes.push(*nextNode);
-
-                    emit updatedScatterGridView(NEXT, nextIndex);
-
-                    // Keeping track of the number of nodes in the next layers left to check
-                    nodesInNextLayer++;
-
-                    //Keeping track of parent node
-                    parentNodes[nextIndex] = currentNode;
-                    parentNodes[nextIndex].xCoord = currentNode.xCoord;
-                    parentNodes[nextIndex].yCoord = currentNode.yCoord;
+                    // Update this node as 'next' in the gridView
+                    if (neighborIndex != gridNodes.endIndex) { // Don't mark end as 'next' if found
+                        emit updatedScatterGridView(NEXT, neighborIndex);
+                    }
                 }
             }
-
-            // This node has been visited
-            nodesLeftInCurrentLayer--;
-
-            // Time and checking for stop from running button
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization)); // Use speedVisualization
-            qDebug() << "BFS: After sleep. Time:" << QDateTime::currentMSecsSinceEpoch();
         }
 
-        // if all nodes in the current layer have been checked
-        if (nodesLeftInCurrentLayer == 0)
-        {
-            nodesLeftInCurrentLayer = nodesInNextLayer;
-            nodesInNextLayer = 0;
-            moveCount++;
-            addingPoint = true;
-        }
+
+        // Time and checking for stop from running button
+        std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
     }
 
-    // If the end is reached, we output the path
+    int pathLength = 0;
+    // If the end is reached, we output the path and calculate pathLength
     if (reachEnd){
         endReached = true;
-        emit pathfindingSearchCompleted(); // Emit signal when search is complete
+
+        // Path reconstruction and pathLength calculation
+        std::vector<int> pathIndices;
+        int currentPathIndex = gridNodes.endIndex;
+        while (currentPathIndex != -1) {
+            pathIndices.insert(pathIndices.begin(), currentPathIndex); // Insert at beginning to reverse
+            if (parentMap.count(currentPathIndex)) {
+                currentPathIndex = parentMap[currentPathIndex];
+            } else {
+                currentPathIndex = -1; // Should not happen if path is valid, but good for safety
+            }
+        }
+        pathLength = pathIndices.size() > 0 ? pathIndices.size() - 1 : 0; // Path length is edges (nodes - 1)
+
+        emit pathfindingSearchCompleted(nodesVisitedCount, pathLength); // Emit signal when search is complete
         qDebug() << "BFS: Pathfinding search completed. Emitting pathfindingSearchCompleted()";
 
-        Node goal = currentNode;
-        Node reverse = goal;
+        // Visualization of the path
+        emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.endIndex].xCoord, gridNodes.Nodes[gridNodes.endIndex].yCoord), true, true); // Clear and start line from end
 
-        // Line Path
-        emit updatedLineGridView(QPointF(reverse.xCoord, reverse.yCoord), true, true);
-
-        while(reverse.xCoord != gridNodes.Nodes[gridNodes.startIndex].xCoord || reverse.yCoord != gridNodes.Nodes[gridNodes.startIndex].yCoord){
-            qDebug() << "BFS: Before suspendIfRequested() during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
-            promise.suspendIfRequested(); // Check for pause/resume during visualization
-            qDebug() << "BFS: After suspendIfRequested() during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
+        for (size_t i = pathIndices.size() - 1; i > 0; --i) { // Iterate from goal back to start (excluding start)
+            promise.suspendIfRequested();
             if (promise.isCanceled()) {
                 qDebug() << "BFS: Algorithm cancelled during visualization.";
-                break; // Allow cancellation during visualization
+                break;
             }
-
-            emit updatedLineGridView(QPointF(reverse.xCoord, reverse.yCoord), true, false);
-
-            int reverseIndex = coordToIndex(reverse.xCoord, reverse.yCoord, widthGrid);
-            Node parentNode = parentNodes[reverseIndex];
-
-            reverse = parentNode;
-
-            // Updating the GridView with PATH
-            emit updatedScatterGridView(PATH, reverseIndex);
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization)); // Use speedVisualization
-            qDebug() << "BFS: After sleep during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
+            int pathNodeIndex = pathIndices[i];
+            emit updatedScatterGridView(PATH, pathNodeIndex);
+            emit updatedLineGridView(QPointF(gridNodes.Nodes[pathNodeIndex].xCoord, gridNodes.Nodes[pathNodeIndex].yCoord), true, false);
+            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
         }
-
+        // Ensure start node is also part of the line if not already
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
-
 
     }else{
         endReached = false;
-        emit pathfindingSearchCompleted(); // Emit signal even if path not found
+        emit pathfindingSearchCompleted(nodesVisitedCount, 0); // Emit signal even if path not found
         qDebug() << "BFS: Pathfinding search not found. Emitting pathfindingSearchCompleted()";
     }
 
-    emit algorithmCompleted(); // This signal is now primarily for post-visualization cleanup
-    qDebug() << "BFS: Algorithm completed (visualization done). Emitting algorithmCompleted()";
+    // Reset visited flags for next run
+    for(Node& node: gridNodes.Nodes) {
+        node.visited = false;
+        node.nextUp = false; // Also reset nextUp for BFS/DFS
+    }
+
+    qDebug() << "DEBUG: " << algorithmToString(currentAlgorithm) << ": About to emit algorithmCompleted()."; // Add this line
+    emit algorithmCompleted();
+
+    qDebug() << "DEBUG: " << algorithmToString(currentAlgorithm) << ": Emitted algorithmCompleted() and pathfindingSearchCompleted()."; // Add this line
 }
 
 // DFS Algorithm
+// In PathAlgorithm.cpp
+
 void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
 {
     qDebug() << "DFS: Algorithm started in worker thread:" << QThread::currentThreadId();
     promise.suspendIfRequested();
     if (promise.isCanceled())
-        return;
-
-    bool reachEnd = false;
-    std::stack<Node> nextNodes;
-    std::vector<Node> parentNodes = gridNodes.Nodes;
-    std::vector<Node> pathNodes = gridNodes.Nodes;
-    nextNodes.push(gridNodes.Nodes[gridNodes.startIndex]);
-    int nodesInNextLayer = 0;
-    int nodesLeftInCurrentLayer =1 ;
-    int moveCount {};
-    Node currentNode;
-    bool addingPoint = true;
-    while(!nextNodes.empty())
     {
-        qDebug() << "DFS: Before suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
+        emit pathfindingSearchCompleted(0, 0); // Emit with current stats on cancel
+        return;
+    }
+    bool reachEnd = false;
+    std::stack<Node*> nextNodesStack; // Use Node*
+    std::map<int, int> parentMap; // Map child index to parent index
+
+    Node* startNode = &(gridNodes.Nodes[gridNodes.startIndex]);
+    nextNodesStack.push(startNode);
+    gridNodes.Nodes[gridNodes.startIndex].visited = true; // Mark start as visited
+    parentMap[gridNodes.startIndex] = -1; // No parent for start node
+
+    int nodesVisitedCount = 0; // Counter for visited nodes
+
+    while(!nextNodesStack.empty())
+    {
         promise.suspendIfRequested();
-        qDebug() << "DFS: After suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
         if (promise.isCanceled()) {
             qDebug() << "DFS: Algorithm cancelled during loop.";
+            emit pathfindingSearchCompleted(nodesVisitedCount, 0); // Emit with current stats on cancel
             return;
         }
 
-        currentNode =  nextNodes.top(); nextNodes.pop();
-        int currentIndex = coordToIndex(currentNode.xCoord, currentNode.yCoord, widthGrid);
+        Node* currentNode = nextNodesStack.top();
+        nextNodesStack.pop();
+        nodesVisitedCount++; // Increment when a node is popped and processed
 
-        emit updatedLineGridView(QPointF(currentNode.xCoord, currentNode.yCoord), addingPoint);
-        addingPoint = false;
+        int currentIndex = coordToIndex(currentNode->xCoord, currentNode->yCoord, widthGrid);
+
+        if (currentIndex != gridNodes.startIndex && currentIndex != gridNodes.endIndex) {
+            emit updatedScatterGridView(VISIT, currentIndex);
+        }
 
         if (currentIndex == gridNodes.endIndex)
         {
@@ -378,76 +396,80 @@ void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
             break;
         }
 
-        if (currentNode.visited == false && currentNode.obstacle == false)
-        {
-            currentNode.visited = true;
-            gridNodes.Nodes[currentIndex].visited = true;
-            emit updatedScatterGridView(VISIT, currentIndex);
-            std::vector<Node> neighbors = retrieveNeighborsGrid(gridNodes, currentNode, widthGrid, heightGrid);
+        // Manual neighbor retrieval for DFS
+        int dx[] = {0, 0, 1, -1}; // Up, Down, Right, Left
+        int dy[] = {1, -1, 0, 0};
 
-            for (auto nextNode=neighbors.begin(); nextNode < neighbors.end(); nextNode++)
+        for (int i = 0; i < 4; ++i) {
+            int neighborX = currentNode->xCoord + dx[i];
+            int neighborY = currentNode->yCoord + dy[i];
+
+            if (neighborX >= 1 && neighborX <= widthGrid &&
+                neighborY >= 1 && neighborY <= heightGrid)
             {
-                if ((*nextNode).nextUp == false){
-                    int nextIndex = coordToIndex((*nextNode).xCoord, (*nextNode).yCoord, widthGrid);
-                    gridNodes.Nodes[nextIndex].nextUp = true;
-                    nextNodes.push(*nextNode);
-                    emit updatedScatterGridView(NEXT, nextIndex);
-                    nodesInNextLayer++;
-                    parentNodes[nextIndex] = currentNode;
-                    parentNodes[nextIndex].xCoord = currentNode.xCoord;
-                    parentNodes[nextIndex].yCoord = currentNode.yCoord;
+                int neighborIndex = coordToIndex(neighborX, neighborY, widthGrid);
+                Node* neighborNode = &(gridNodes.Nodes[neighborIndex]);
+
+                if (!neighborNode->visited && !neighborNode->obstacle) {
+                    neighborNode->visited = true; // Mark as visited when added to stack
+                    nextNodesStack.push(neighborNode);
+                    parentMap[neighborIndex] = currentIndex; // Store parent
+
+                    if (neighborIndex != gridNodes.endIndex) {
+                        emit updatedScatterGridView(NEXT, neighborIndex);
+                    }
                 }
             }
-            nodesLeftInCurrentLayer--;
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
-            qDebug() << "DFS: After sleep. Time:" << QDateTime::currentMSecsSinceEpoch();
         }
-
-        if (nodesLeftInCurrentLayer == 0){
-            nodesLeftInCurrentLayer = nodesInNextLayer;
-            nodesInNextLayer = 0;
-            moveCount++;
-            addingPoint = true;
-        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
     }
 
-    promise.addResult(moveCount);
-
+    int pathLength = 0;
     if (reachEnd){
         endReached = true;
-        emit pathfindingSearchCompleted();
+
+        // Path reconstruction and pathLength calculation
+        std::vector<int> pathIndices;
+        int currentPathIndex = gridNodes.endIndex;
+        while (currentPathIndex != -1) {
+            pathIndices.insert(pathIndices.begin(), currentPathIndex);
+            if (parentMap.count(currentPathIndex)) {
+                currentPathIndex = parentMap[currentPathIndex];
+            } else {
+                currentPathIndex = -1;
+            }
+        }
+        pathLength = pathIndices.size() > 0 ? pathIndices.size() - 1 : 0;
+
+        emit pathfindingSearchCompleted(nodesVisitedCount, pathLength);
         qDebug() << "DFS: Pathfinding search completed. Emitting pathfindingSearchCompleted()";
 
-        Node goal = currentNode;
-        Node reverse = goal;
-        emit updatedLineGridView(QPointF(reverse.xCoord, reverse.yCoord), true, true);
+        // Visualization of the path
+        emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.endIndex].xCoord, gridNodes.Nodes[gridNodes.endIndex].yCoord), true, true);
 
-        int count=0;
-        while(reverse.xCoord != gridNodes.Nodes[gridNodes.startIndex].xCoord || reverse.yCoord != gridNodes.Nodes[gridNodes.startIndex].yCoord)
-        {
-            qDebug() << "DFS: Before suspendIfRequested() during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
+        for (size_t i = pathIndices.size() - 1; i > 0; --i) {
             promise.suspendIfRequested();
-            qDebug() << "DFS: After suspendIfRequested() during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
             if (promise.isCanceled()) {
                 qDebug() << "DFS: Algorithm cancelled during visualization.";
                 break;
             }
-
-            emit updatedLineGridView(QPointF(reverse.xCoord, reverse.yCoord), true, false);
-            int reverseIndex = coordToIndex(reverse.xCoord, reverse.yCoord, widthGrid);
-            Node parentNode = parentNodes[reverseIndex];
-            emit updatedScatterGridView(PATH, reverseIndex);
-            reverse = parentNode;
-            count++;
+            int pathNodeIndex = pathIndices[i];
+            emit updatedScatterGridView(PATH, pathNodeIndex);
+            emit updatedLineGridView(QPointF(gridNodes.Nodes[pathNodeIndex].xCoord, gridNodes.Nodes[pathNodeIndex].yCoord), true, false);
             std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
-            qDebug() << "DFS: After sleep during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
         }
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
     }else{
         endReached = false;
-        emit pathfindingSearchCompleted();
+        emit pathfindingSearchCompleted(nodesVisitedCount, 0);
         qDebug() << "DFS: Pathfinding search not found. Emitting pathfindingSearchCompleted()";
+    }
+
+    // Reset visited flags for next run
+    for(Node& node: gridNodes.Nodes) {
+        node.visited = false;
+        node.nextUp = false; // Also reset nextUp for BFS/DFS
     }
 
     emit algorithmCompleted();
@@ -455,18 +477,26 @@ void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
 }
 
 
+
+//dijkstra
+// In PathAlgorithm.cpp
+
 void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
 {
     qDebug() << "Dijkstra: Algorithm started in worker thread:" << QThread::currentThreadId();
     promise.suspendIfRequested();
-    if (promise.isCanceled())
+    if (promise.isCanceled()) {
+        emit pathfindingSearchCompleted(0, 0);
         return;
+    }
 
+    // Reset node properties for a new run
     for(Node& node: gridNodes.Nodes)
     {
-        FillNeighboursNode(node);
+        FillNeighboursNode(node); // Ensure neighbors are filled
         node.localGoal      = INFINITY;
         node.parent         = nullptr;
+        node.visited        = false; // Reset visited flag
     }
 
     auto distance = [](Node* a, Node* b)
@@ -478,109 +508,136 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
     Node* nodeStart = &(gridNodes.Nodes[gridNodes.startIndex]);
     Node* nodeEnd = &(gridNodes.Nodes[gridNodes.endIndex]);
 
-    Node* nodeCurrent = &(gridNodes.Nodes[gridNodes.startIndex]);
     nodeStart->localGoal = 0.0f;
 
+    // Use std::priority_queue for Dijkstra for efficiency, or sort std::list
+    // For now, sticking with std::list and sorting as in your code, but a PQ is better.
     std::list<Node*> nodesToTest;
-    nodesToTest.push_back(nodeCurrent);
+    nodesToTest.push_back(nodeStart);
+
+    int nodesVisitedCount = 0; // Counter for visited nodes
 
     while(!nodesToTest.empty())
     {
-        qDebug() << "Dijkstra: Before suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
         promise.suspendIfRequested();
-        qDebug() << "Dijkstra: After suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
         if (promise.isCanceled()) {
             qDebug() << "Dijkstra: Algorithm cancelled during loop.";
+            emit pathfindingSearchCompleted(nodesVisitedCount, 0);
             return;
         }
 
         nodesToTest.sort([](const Node* a, const Node* b){return a->localGoal < b->localGoal;});
-        while(!nodesToTest.empty() && nodesToTest.front()->visited)     {   nodesToTest.pop_front();    }
-        if (nodesToTest.empty())    {   break;  }
+        // Remove visited nodes from the front (this is inefficient with std::list, better with PQ)
+        while(!nodesToTest.empty() && nodesToTest.front()->visited) {
+            nodesToTest.pop_front();
+        }
+        if (nodesToTest.empty()) {
+            break;
+        }
 
-        nodeCurrent = nodesToTest.front();
-        nodeCurrent->visited = true;
+        Node* nodeCurrent = nodesToTest.front();
+        nodesToTest.pop_front(); // Remove from open list
+        nodeCurrent->visited = true; // Mark as visited
+        nodesVisitedCount++; // Increment when a node is processed (removed from open list)
 
         int indexCurrent = coordToIndex(nodeCurrent->xCoord, nodeCurrent->yCoord, widthGrid);
-        emit updatedScatterGridView(VISIT, indexCurrent);
+        if (indexCurrent != gridNodes.startIndex && indexCurrent != gridNodes.endIndex) {
+            emit updatedScatterGridView(VISIT, indexCurrent);
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
-        qDebug() << "Dijkstra: After sleep. Time:" << QDateTime::currentMSecsSinceEpoch();
+
+        if (nodeCurrent == nodeEnd) { // Goal reached
+            break;
+        }
 
         for (Node* nodeNeighbour: nodeCurrent->neighbours)
         {
-            if(!nodeNeighbour->visited && !nodeNeighbour->obstacle)
+            if(!nodeNeighbour->obstacle) // Only consider non-obstacle neighbors
             {
-                int nextUpIndex = coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid);
-                if (nextUpIndex == gridNodes.endIndex){
-                    nodesToTest.clear();
+                float potentialLowerGoal = nodeCurrent->localGoal + distance(nodeCurrent, nodeNeighbour);
+                if (potentialLowerGoal < nodeNeighbour->localGoal){
                     nodeNeighbour->parent = nodeCurrent;
-                    break;
-                }else{
-                    nodesToTest.push_back(nodeNeighbour);
-                    emit updatedScatterGridView(NEXT, nextUpIndex);
-                }
-            }
+                    nodeNeighbour->localGoal = potentialLowerGoal;
 
-            float potentialLowerGoal = nodeCurrent->localGoal + distance(nodeCurrent, nodeNeighbour);
-            if (potentialLowerGoal < nodeNeighbour->localGoal){
-                nodeNeighbour->parent = nodeCurrent;
-                nodeNeighbour->localGoal = potentialLowerGoal;
+                    // If not visited, add to nodesToTest (or update in PQ)
+                    if (!nodeNeighbour->visited) {
+                        nodesToTest.push_back(nodeNeighbour);
+                        // Only emit NEXT if it's not the end node
+                        if (nodeNeighbour != nodeEnd) {
+                            emit updatedScatterGridView(NEXT, coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid));
+                        }
+                    }
+                }
             }
         }
     }
 
-    if (nodeEnd->parent != nullptr){
-        emit pathfindingSearchCompleted();
+    int pathLength = 0;
+    if (nodeEnd->parent != nullptr){ // Path found
+        // Path reconstruction and pathLength calculation
+        std::vector<int> pathIndices;
+        Node* currentPathNode = nodeEnd;
+        while (currentPathNode != nullptr) {
+            pathIndices.insert(pathIndices.begin(), coordToIndex(currentPathNode->xCoord, currentPathNode->yCoord, widthGrid));
+            currentPathNode = currentPathNode->parent;
+        }
+        pathLength = pathIndices.size() > 0 ? pathIndices.size() - 1 : 0;
+
+        emit pathfindingSearchCompleted(nodesVisitedCount, pathLength);
         qDebug() << "Dijkstra: Pathfinding search completed. Emitting pathfindingSearchCompleted()";
 
-        Node* reverseNode = nodeEnd;
-        emit updatedLineGridView(QPointF(reverseNode->xCoord, reverseNode->yCoord), true, true);
+        // Visualization of the path
+        emit updatedLineGridView(QPointF(nodeEnd->xCoord, nodeEnd->yCoord), true, true);
 
-        while(reverseNode->parent != nullptr)
-        {
-            qDebug() << "Dijkstra: Before suspendIfRequested() during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
+        for (size_t i = pathIndices.size() - 1; i > 0; --i) { // Iterate from goal back to start (excluding start)
             promise.suspendIfRequested();
-            qDebug() << "Dijkstra: After suspendIfRequested() during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
             if (promise.isCanceled()) {
                 qDebug() << "Dijkstra: Algorithm cancelled during visualization.";
                 break;
             }
-
-            reverseNode = reverseNode->parent;
-            int reverseIndex = coordToIndex(reverseNode->xCoord, reverseNode->yCoord, widthGrid);
-
-            emit updatedScatterGridView(PATH, reverseIndex);
-            emit updatedLineGridView(QPointF(reverseNode->xCoord, reverseNode->yCoord), true, false);
-
+            int pathNodeIndex = pathIndices[i];
+            emit updatedScatterGridView(PATH, pathNodeIndex);
+            emit updatedLineGridView(QPointF(gridNodes.Nodes[pathNodeIndex].xCoord, gridNodes.Nodes[pathNodeIndex].yCoord), true, false);
             std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
-            qDebug() << "Dijkstra: After sleep during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
         }
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
-    }else{
-        endReached = -1;
-        emit pathfindingSearchCompleted();
+    }else{ // No path found
+        endReached = false; // Or keep as -1 as you had, but false is more consistent for boolean
+        emit pathfindingSearchCompleted(nodesVisitedCount, 0);
         qDebug() << "Dijkstra: Pathfinding search not found. Emitting pathfindingSearchCompleted()";
+    }
+
+    // Reset visited flags for next run
+    for(Node& node: gridNodes.Nodes) {
+        node.visited = false;
+        node.nextUp = false; // Not strictly used in Dijkstra, but good to reset
     }
 
     emit algorithmCompleted();
     qDebug() << "Dijkstra: Algorithm completed (visualization done). Emitting algorithmCompleted()";
 }
 
+// In PathAlgorithm.cpp
+
 void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
 {
     qDebug() << "AStar: Algorithm started in worker thread:" << QThread::currentThreadId();
     promise.suspendIfRequested();
-    if (promise.isCanceled())
+    if (promise.isCanceled()) {
+        emit pathfindingSearchCompleted(0, 0);
         return;
+    }
 
+    // Reset node properties for a new run
     for(Node& node: gridNodes.Nodes)
     {
         FillNeighboursNode(node);
         node.globalGoal     = INFINITY;
         node.localGoal      = INFINITY;
         node.parent         = nullptr;
+        node.visited        = false; // Reset visited flag
     }
 
     auto distance = [](Node* a, Node* b)
@@ -594,92 +651,113 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
     Node* nodeStart = &(gridNodes.Nodes[gridNodes.startIndex]);
     Node* nodeEnd = &(gridNodes.Nodes[gridNodes.endIndex]);
 
-    Node* nodeCurrent = &(gridNodes.Nodes[gridNodes.startIndex]);
     nodeStart->localGoal = 0.0f;
     nodeStart->globalGoal = heuristic(nodeStart, nodeEnd);
 
-    std::list<Node*> nodesToTest;
-    nodesToTest.push_back(nodeCurrent);
+    // Use std::priority_queue for A* for efficiency, or sort std::list
+    std::list<Node*> nodesToTest; // This acts as your open set
+    nodesToTest.push_back(nodeStart);
+
+    int nodesVisitedCount = 0; // Counter for visited nodes
 
     while(!nodesToTest.empty())
     {
-        qDebug() << "AStar: Before suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
         promise.suspendIfRequested();
-        qDebug() << "AStar: After suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
         if (promise.isCanceled()) {
             qDebug() << "AStar: Algorithm cancelled during loop.";
+            emit pathfindingSearchCompleted(nodesVisitedCount, 0);
             return;
         }
 
+        // Sort by globalGoal (f-score)
         nodesToTest.sort([](const Node* a, const Node* b){return a->globalGoal < b->globalGoal;});
-        while(!nodesToTest.empty() && nodesToTest.front()->visited)     {   nodesToTest.pop_front();    }
-        if (nodesToTest.empty())    {   break;  }
+        // Remove visited nodes from the front (again, inefficient with list, better with PQ)
+        while(!nodesToTest.empty() && nodesToTest.front()->visited) {
+            nodesToTest.pop_front();
+        }
+        if (nodesToTest.empty()) {
+            break;
+        }
 
-        nodeCurrent = nodesToTest.front();
-        nodeCurrent->visited = true;
+        Node* nodeCurrent = nodesToTest.front();
+        nodesToTest.pop_front(); // Remove from open list
+        nodeCurrent->visited = true; // Mark as visited
+        nodesVisitedCount++; // Increment when a node is processed (removed from open list)
 
         int indexCurrent = coordToIndex(nodeCurrent->xCoord, nodeCurrent->yCoord, widthGrid);
-        emit updatedScatterGridView(VISIT, indexCurrent);
+        if (indexCurrent != gridNodes.startIndex && indexCurrent != gridNodes.endIndex) {
+            emit updatedScatterGridView(VISIT, indexCurrent);
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
-        qDebug() << "AStar: After sleep. Time:" << QDateTime::currentMSecsSinceEpoch();
+
+        if (nodeCurrent == nodeEnd) { // Goal reached
+            break;
+        }
 
         for (Node* nodeNeighbour: nodeCurrent->neighbours)
         {
-            int nextUpIndex = coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid);
-            if(!nodeNeighbour->visited && !nodeNeighbour->obstacle)
+            if(!nodeNeighbour->obstacle) // Only consider non-obstacle neighbors
             {
-                if (nextUpIndex == gridNodes.endIndex){
-                    nodesToTest.clear();
+                float potentialLowerGoal = nodeCurrent->localGoal + distance(nodeCurrent, nodeNeighbour);
+                if (potentialLowerGoal < nodeNeighbour->localGoal){
                     nodeNeighbour->parent = nodeCurrent;
-                    break;
-                }else{
-                    nodesToTest.push_back(nodeNeighbour);
-                    emit updatedScatterGridView(NEXT, nextUpIndex);
-                }
-            }
+                    nodeNeighbour->localGoal = potentialLowerGoal;
+                    nodeNeighbour->globalGoal = nodeNeighbour->localGoal + heuristic(nodeNeighbour, nodeEnd);
 
-            float potentialLowerGoal = nodeCurrent->localGoal + distance(nodeCurrent, nodeNeighbour);
-            if (potentialLowerGoal < nodeNeighbour->localGoal)
-            {
-                nodeNeighbour->parent = nodeCurrent;
-                nodeNeighbour->localGoal = potentialLowerGoal;
-                nodeNeighbour->globalGoal = nodeNeighbour->localGoal + heuristic(nodeNeighbour, nodeEnd);
+                    // If not visited, add to nodesToTest (or update in PQ)
+                    if (!nodeNeighbour->visited) {
+                        nodesToTest.push_back(nodeNeighbour);
+                        // Only emit NEXT if it's not the end node
+                        if (nodeNeighbour != nodeEnd) {
+                            emit updatedScatterGridView(NEXT, coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid));
+                        }
+                    }
+                }
             }
         }
     }
 
-    if (nodeEnd->parent != nullptr){
-        emit pathfindingSearchCompleted();
+    int pathLength = 0;
+    if (nodeEnd->parent != nullptr){ // Path found
+        // Path reconstruction and pathLength calculation
+        std::vector<int> pathIndices;
+        Node* currentPathNode = nodeEnd;
+        while (currentPathNode != nullptr) {
+            pathIndices.insert(pathIndices.begin(), coordToIndex(currentPathNode->xCoord, currentPathNode->yCoord, widthGrid));
+            currentPathNode = currentPathNode->parent;
+        }
+        pathLength = pathIndices.size() > 0 ? pathIndices.size() - 1 : 0;
+
+        emit pathfindingSearchCompleted(nodesVisitedCount, pathLength);
         qDebug() << "AStar: Pathfinding search completed. Emitting pathfindingSearchCompleted()";
 
-        Node* reverseNode = nodeEnd;
-        emit updatedLineGridView(QPointF(reverseNode->xCoord, reverseNode->yCoord), true, true);
-        while(reverseNode->parent != nullptr)
-        {
-            qDebug() << "AStar: Before suspendIfRequested() during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
+        // Visualization of the path
+        emit updatedLineGridView(QPointF(nodeEnd->xCoord, nodeEnd->yCoord), true, true);
+
+        for (size_t i = pathIndices.size() - 1; i > 0; --i) { // Iterate from goal back to start (excluding start)
             promise.suspendIfRequested();
-            qDebug() << "AStar: After suspendIfRequested() during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
             if (promise.isCanceled()) {
                 qDebug() << "AStar: Algorithm cancelled during visualization.";
                 break;
             }
-
-            reverseNode = reverseNode->parent;
-            int reverseIndex = coordToIndex(reverseNode->xCoord, reverseNode->yCoord, widthGrid);
-
-            emit updatedScatterGridView(PATH, reverseIndex);
-            emit updatedLineGridView(QPointF(reverseNode->xCoord, reverseNode->yCoord), true, false);
-
+            int pathNodeIndex = pathIndices[i];
+            emit updatedScatterGridView(PATH, pathNodeIndex);
+            emit updatedLineGridView(QPointF(gridNodes.Nodes[pathNodeIndex].xCoord, gridNodes.Nodes[pathNodeIndex].yCoord), true, false);
             std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
-            qDebug() << "AStar: After sleep during visualization. Time:" << QDateTime::currentMSecsSinceEpoch();
         }
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
-    }else{
-        endReached = -1;
-        emit pathfindingSearchCompleted();
+    }else{ // No path found
+        endReached = false;
+        emit pathfindingSearchCompleted(nodesVisitedCount, 0);
         qDebug() << "AStar: Pathfinding search not found. Emitting pathfindingSearchCompleted()";
+    }
+
+    // Reset visited flags for next run
+    for(Node& node: gridNodes.Nodes) {
+        node.visited = false;
+        node.nextUp = false; // Not strictly used in A*, but good to reset
     }
 
     emit algorithmCompleted();
@@ -687,121 +765,148 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
 }
 
 // Maze generation
+// In PathAlgorithm.cpp
+
 void PathAlgorithm::performRecursiveBackTrackerAlgorithm(QPromise<int>& promise)
 {
     qDebug() << "Maze: Algorithm started in worker thread:" << QThread::currentThreadId();
     promise.suspendIfRequested();
-    if (promise.isCanceled())
+    if (promise.isCanceled()) {
+        emit pathfindingSearchCompleted(0, 0); // Emit with 0,0 on cancel for maze
         return;
+    }
 
+    // Initialize all nodes as obstacles (except start/end)
     for (int index = 0; index < widthGrid * heightGrid; index++){
-        qDebug() << "Maze: Before suspendIfRequested() during init. Time:" << QDateTime::currentMSecsSinceEpoch();
         promise.suspendIfRequested();
-        qDebug() << "Maze: After suspendIfRequested() during init. Time:" << QDateTime::currentMSecsSinceEpoch();
         if (promise.isCanceled()) {
             qDebug() << "Maze: Algorithm cancelled during init.";
+            emit pathfindingSearchCompleted(0, 0); // Emit with 0,0 on cancel for maze
             return;
         }
 
-        if (index != gridNodes.startIndex || index != gridNodes.endIndex){
+        // Only set to obstacle if it's not the start or end node
+        if (index != gridNodes.startIndex && index != gridNodes.endIndex){
             gridNodes.Nodes[index].obstacle = true;
             emit updatedScatterGridView(FREETOOBSTACLE, index);
         }
     }
 
     std::stack<Node*> stackUnVisitedNodes;
+    // Choose a random starting cell for maze generation
     int randomIndex = rand() % (widthGrid * heightGrid);
-    stackUnVisitedNodes.push(&(gridNodes.Nodes[randomIndex]));
-    gridNodes.Nodes[randomIndex].visited = true;
+    Node* startMazeNode = &(gridNodes.Nodes[randomIndex]);
+
+    stackUnVisitedNodes.push(startMazeNode);
+    startMazeNode->visited = true;
+    // Ensure the start node for maze generation is not an obstacle
+    if (startMazeNode->obstacle) {
+        startMazeNode->obstacle = false;
+        emit updatedScatterGridView(OBSTACLETOFREE, randomIndex);
+    }
+
     int numberVisitedCells = 1;
-    int offset = 2;
+    int offset = 2; // For carving paths in a grid, typically move 2 steps
     std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Initial sleep for maze generation
 
     while(numberVisitedCells < widthGrid * heightGrid && !stackUnVisitedNodes.empty() ){
-        qDebug() << "Maze: Before suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
         promise.suspendIfRequested();
-        qDebug() << "Maze: After suspendIfRequested(). Loop Iteration. Time:" << QDateTime::currentMSecsSinceEpoch();
         if (promise.isCanceled()) {
             qDebug() << "Maze: Algorithm cancelled during loop.";
+            emit pathfindingSearchCompleted(0, 0); // Emit with 0,0 on cancel for maze
             return;
         }
 
         Node* currentNode = stackUnVisitedNodes.top();
         int currentIndex = coordToIndex(currentNode->xCoord, currentNode->yCoord, widthGrid);
-        std::vector<int> availableNeighbours;
+        std::vector<int> availableNeighboursDirections; // 0:East, 1:South, 2:West, 3:North
 
-        int eastIndex = coordToIndex(currentNode->xCoord + offset - 1, currentNode->yCoord, widthGrid);
-        int eastIndexOffset = coordToIndex(currentNode->xCoord + offset, currentNode->yCoord, widthGrid);
-        if (currentNode->xCoord + offset <= widthGrid && !gridNodes.Nodes[eastIndexOffset].visited){
-            availableNeighbours.push_back(0);
+        // Check potential neighbors (2 steps away for carving)
+        // East
+        int eastNeighborX = currentNode->xCoord + offset;
+        int eastPathX = currentNode->xCoord + offset - 1;
+        if (eastNeighborX <= widthGrid && !gridNodes.Nodes[coordToIndex(eastNeighborX, currentNode->yCoord, widthGrid)].visited){
+            availableNeighboursDirections.push_back(0);
+        }
+        // South
+        int southNeighborY = currentNode->yCoord - offset;
+        int southPathY = currentNode->yCoord - offset + 1;
+        if (southNeighborY >= 1 && !gridNodes.Nodes[coordToIndex(currentNode->xCoord, southNeighborY, widthGrid)].visited){
+            availableNeighboursDirections.push_back(1);
+        }
+        // West
+        int westNeighborX = currentNode->xCoord - offset;
+        int westPathX = currentNode->xCoord - offset + 1;
+        if (westNeighborX >= 1 && !gridNodes.Nodes[coordToIndex(westNeighborX, currentNode->yCoord, widthGrid)].visited){
+            availableNeighboursDirections.push_back(2);
+        }
+        // North
+        int northNeighborY = currentNode->yCoord + offset;
+        int northPathY = currentNode->yCoord + offset - 1;
+        if (northNeighborY <= heightGrid && !gridNodes.Nodes[coordToIndex(currentNode->xCoord, northNeighborY, widthGrid)].visited){
+            availableNeighboursDirections.push_back(3);
         }
 
-        int southIndex          =   coordToIndex(currentNode->xCoord,currentNode->yCoord - offset + 1, widthGrid);
-        int southIndexOffset    =   coordToIndex(currentNode->xCoord,currentNode->yCoord - offset, widthGrid);
-        if (currentNode->yCoord - offset >= 1 && !gridNodes.Nodes[southIndexOffset].visited){
-            availableNeighbours.push_back(1);
-        }
-        int westIndex = coordToIndex(currentNode->xCoord - offset + 1, currentNode->yCoord, widthGrid);
-        int westIndexOffset = coordToIndex(currentNode->xCoord - offset, currentNode->yCoord, widthGrid);
 
-        if (currentNode->xCoord - offset >= 1 && !gridNodes.Nodes[westIndexOffset].visited){
-            availableNeighbours.push_back(2);
-        }
+        if (!(availableNeighboursDirections.empty())){
+            int randomDirection = availableNeighboursDirections[rand() % availableNeighboursDirections.size()];
+            Node* nextNode = nullptr;
+            int pathIndexToClear = -1;
 
-        int northIndex = coordToIndex(currentNode->xCoord, currentNode->yCoord + offset -1, widthGrid);
-        int northIndexOffset = coordToIndex(currentNode->xCoord, currentNode->yCoord + offset, widthGrid);
-        if (currentNode->yCoord + offset <= heightGrid && !gridNodes.Nodes[northIndexOffset].visited){
-            availableNeighbours.push_back(3);
-        }
-
-        if (!(availableNeighbours.empty())){
-            int randomNeighour = availableNeighbours[rand() % availableNeighbours.size()];
-
-            switch (randomNeighour) {
-            case 0:
-                emit updatedScatterGridView(OBSTACLETOFREE, eastIndex);
-                emit updatedScatterGridView(OBSTACLETOFREE, eastIndexOffset);
-                stackUnVisitedNodes.push(&(gridNodes.Nodes[eastIndexOffset]));
+            switch (randomDirection) {
+            case 0: // East
+                nextNode = &(gridNodes.Nodes[coordToIndex(eastNeighborX, currentNode->yCoord, widthGrid)]);
+                pathIndexToClear = coordToIndex(eastPathX, currentNode->yCoord, widthGrid);
                 break;
-            case 1:
-                emit updatedScatterGridView(OBSTACLETOFREE, southIndex);
-                emit updatedScatterGridView(OBSTACLETOFREE, southIndexOffset);
-                stackUnVisitedNodes.push(&(gridNodes.Nodes[southIndexOffset]));
+            case 1: // South
+                nextNode = &(gridNodes.Nodes[coordToIndex(currentNode->xCoord, southNeighborY, widthGrid)]);
+                pathIndexToClear = coordToIndex(currentNode->xCoord, southPathY, widthGrid);
                 break;
-            case 2:
-                emit updatedScatterGridView(OBSTACLETOFREE, westIndex);
-                emit updatedScatterGridView(OBSTACLETOFREE, westIndexOffset);
-                stackUnVisitedNodes.push(&(gridNodes.Nodes[westIndexOffset]));
+            case 2: // West
+                nextNode = &(gridNodes.Nodes[coordToIndex(westNeighborX, currentNode->yCoord, widthGrid)]);
+                pathIndexToClear = coordToIndex(westPathX, currentNode->yCoord, widthGrid);
                 break;
-            case 3:
-                emit updatedScatterGridView(OBSTACLETOFREE, northIndex);
-                emit updatedScatterGridView(OBSTACLETOFREE, northIndexOffset);
-                stackUnVisitedNodes.push(&(gridNodes.Nodes[northIndexOffset]));
+            case 3: // North
+                nextNode = &(gridNodes.Nodes[coordToIndex(currentNode->xCoord, northNeighborY, widthGrid)]);
+                pathIndexToClear = coordToIndex(currentNode->xCoord, northPathY, widthGrid);
                 break;
             default:
                 break;
             }
 
-            numberVisitedCells++;
-            gridNodes.Nodes[currentIndex].visited = true;
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
-            qDebug() << "Maze: After sleep. Time:" << QDateTime::currentMSecsSinceEpoch();
-        }else{
-            gridNodes.Nodes[currentIndex].visited = true;
-            if (!stackUnVisitedNodes.empty()){
-                stackUnVisitedNodes.pop();
-            }else{
-                break;
+            if (nextNode) {
+                // Carve path (make it free)
+                if (pathIndexToClear != -1) {
+                    gridNodes.Nodes[pathIndexToClear].obstacle = false;
+                    emit updatedScatterGridView(OBSTACLETOFREE, pathIndexToClear);
+                }
+                // Make next node free and push to stack
+                nextNode->obstacle = false;
+                nextNode->visited = true;
+                emit updatedScatterGridView(OBSTACLETOFREE, coordToIndex(nextNode->xCoord, nextNode->yCoord, widthGrid));
+                stackUnVisitedNodes.push(nextNode);
+                numberVisitedCells++;
             }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+        }else{
+            // Backtrack
+            stackUnVisitedNodes.pop();
         }
     }
 
-    for(Node& node: gridNodes.Nodes)    {   node.visited = false;   }
+    // Reset visited flags for next pathfinding run
+    for(Node& node: gridNodes.Nodes) {
+        node.visited = false;
+        node.nextUp = false;
+    }
 
     emit algorithmCompleted();
-    emit pathfindingSearchCompleted();
+    // For maze generation, nodesVisited and pathLength are typically 0 or not applicable
+    emit pathfindingSearchCompleted(0,0);
     qDebug() << "Maze: Algorithm completed. Emitting algorithmCompleted() and pathfindingSearchCompleted()";
 }
+
 
 
 void PathAlgorithm::FillNeighboursNode(Node& node)
