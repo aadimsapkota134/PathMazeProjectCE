@@ -22,7 +22,7 @@ GridView::GridView(int widthGrid, int heightGrid, int markerSize, QChartView* pa
     chart = new QChart();
     chart->setBackgroundVisible(true);
 
-    // New Series of scatter elements
+    // Series of scatter elements
     freeElements        = new QScatterSeries();
     obstacleElements    = new QScatterSeries();
     visitedElements     = new QScatterSeries();
@@ -134,6 +134,7 @@ void GridView::populateGridMap(ARRANGEMENTS arrangement, bool reset)
     if (simulationRunning)
     {
         QMessageBox::information(this, "Information", "Please stop the simulation first");
+        return;
     }
 
     if (reset){
@@ -266,15 +267,6 @@ QChart* GridView::createChart()
     // Set marker size
     setElementsMarkerSize();
 
-    // Label Points
-    //    freeElements    ->setPointLabelsVisible();
-    //    obstacleElements->setPointLabelsVisible();
-    //    visitedElements ->setPointLabelsVisible();
-    //    nextElements    ->setPointLabelsVisible();
-    //    startElement    ->setPointLabelsVisible();
-    //    endElement      ->setPointLabelsVisible();
-
-    // Set Marker color
     //freeElements    ->setColor(QColorConstants::White);
     obstacleElements->setColor(QColor("#1e272e"));      // Obstacle - charcoal black
     visitedElements ->setColor(QColor("#34ace0"));      // Visited - cyan blue
@@ -500,7 +492,71 @@ void GridView::handleClickedPoint(const QPointF& point)
     }
 
 }
+void GridView::setupNodes()
+{
+    // Clear any existing nodes from previous grid configurations
+    gridNodes.Nodes.clear();
+    gridNodes.Nodes.reserve(widthGrid * heightGrid); // Pre-allocate memory for efficiency
 
+    // Populate the Nodes vector with new Node objects
+    for (int y = 1; y <= heightGrid; ++y) // Assuming y-coords start from 1
+    {
+        for (int x = 1; x <= widthGrid; ++x) // Assuming x-coords start from 1
+        {
+            Node newNode;
+            newNode.xCoord = x;
+            newNode.yCoord = y;
+            newNode.visited = false;
+            newNode.obstacle = false;
+            newNode.nextUp = false; // Used in BFS/DFS
+
+            // Initialize ASTAR specific values if necessary, e.g., to a large number
+            newNode.globalGoal = std::numeric_limits<float>::infinity();
+            newNode.localGoal = std::numeric_limits<float>::infinity();
+            newNode.parent = nullptr; // Important to initialize pointers to nullptr
+
+            gridNodes.Nodes.push_back(newNode);
+        }
+    }
+
+    // Set default start and end indices based on the new grid size
+    // For example, top-left and bottom-right
+    gridNodes.startIndex = coordToIndex(1, 1, widthGrid); // Assuming (1,1) is start
+    gridNodes.endIndex = coordToIndex(widthGrid, heightGrid, widthGrid); // Assuming (width, height) is end
+
+    qDebug() << "GridView: setupNodes() completed. Grid dimensions: " << widthGrid << "x" << heightGrid;
+    qDebug() << "GridView: gridNodes.Nodes.size(): " << gridNodes.Nodes.size();
+    qDebug() << "GridView: startIndex: " << gridNodes.startIndex << ", endIndex: " << gridNodes.endIndex;
+
+    // IMPORTANT: Clear all existing visualization series here as well
+    // This ensures a clean slate on the UI when grid changes
+    freeElements->clear();
+    obstacleElements->clear();
+    visitedElements->clear();
+    nextElements->clear();
+    pathElements->clear();
+    pathLine->clear();
+    startElement->clear();
+    endElement->clear();
+
+    // Re-add free elements for the new grid
+    for (const auto& node : gridNodes.Nodes) {
+        if (!node.obstacle) {
+            freeElements->append(QPointF(node.xCoord, node.yCoord));
+        }
+    }
+
+    // Re-add start and end elements
+    startElement->append(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord));
+    endElement->append(QPointF(gridNodes.Nodes[gridNodes.endIndex].xCoord, gridNodes.Nodes[gridNodes.endIndex].yCoord));
+}
+
+// Ensure coordToIndex exists and is correct in GridView.cpp or a utility function
+int coordToIndex(int x, int y, int gridWidth)
+{
+    // Assuming 1-based coordinates for x,y
+    return (y - 1) * gridWidth + (x - 1);
+}
 
 qreal GridView::computeDistanceBetweenPoints(const QPointF& pointA, const QPointF& pointB)
 {
@@ -513,10 +569,7 @@ int coordToIndex(const QPointF& point, int widthGrid)
     return (point.y() - 1) * widthGrid + point.x() - 1;
 }
 
-int coordToIndex(int x, int y,  int widthGrid)
-{
-    return (y - 1) * widthGrid + x - 1;
-}
+
 
 
 void GridView::AlgorithmView(bool on)
@@ -677,4 +730,9 @@ void GridView::updateLine(QPointF updatePoint, bool addingPoint)
     }else{
         pathLine->replace(pathLine->points().size() - 1, updatePoint);
     }
+}
+int GridView::getPathLength() const
+{
+
+    return 0; // The actual path length will be calculated and passed by PathAlgorithm
 }
