@@ -3,7 +3,9 @@
 
 #include <QMainWindow>
 #include <QTimer>         // Add this
-#include <QElapsedTimer>  // Add this
+#include <QElapsedTimer>// Add this
+#include <QTableWidget>   // Add this for QTableWidget
+#include <QTableWidgetItem>
 #include "GridView.h"
 #include "PathAlgorithm.h"
 #include "qlabel.h"
@@ -16,7 +18,14 @@ class MainWindow;
 }
 
 QT_END_NAMESPACE
-
+//structure to hold comparison data for each algorithm run
+struct AlgorithmComparisonData {
+    QString algorithmName;
+    qint64  timeElapsedMs;
+    int     nodesVisited;
+    int     pathLength;
+    QString gridSize;
+};
 
 class MainWindow : public QMainWindow
 {
@@ -34,6 +43,7 @@ public:
     void setupInteractionComboBox();
     void setupAlgorithmsComboBox();
     void setupGridView(QString gridViewName);
+    void setupComparisonTable();
 
     // Getters
     GridView& getGridView();
@@ -63,7 +73,7 @@ public slots:
     void onAlgorithmCompleted();
 
     // Action to do when the pathfinding search completes (before visualization)
-    void onPathfindingSearchCompleted();
+    void onPathfindingSearchCompleted(int nodesVisited, int pathLength);
 
 private slots:
     void on_dialWidth_valueChanged(int value);
@@ -84,6 +94,8 @@ private slots:
 
     void updateElapsedTime(); // New slot for timer updates
 
+    void on_clearComparisonButton_clicked(); // NEW: Slot for clearing all comparison data
+    void on_deleteSelectedRowButton_clicked(); // NEW: Slot for deleting a selected row
 private:
 
     Ui::MainWindow* ui;
@@ -94,6 +106,6 @@ private:
     QLabel* timeDisplayLabel;   // Declare QLabel for time display
 
     qint64 pausedTimeOffset; // NEW: Stores time accumulated before pausing
-
+    QList<AlgorithmComparisonData> comparisonDataList; // NEW: To store comparison results
 };
 #endif // MAINWINDOW_H
