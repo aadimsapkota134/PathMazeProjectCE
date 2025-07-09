@@ -19,7 +19,11 @@ The algorithms implemented here are the following:
 
 
 
-Apart from using Qt data types, we've used multithreading (a technique where a program is divided into smaller units of execution called threads. Each thread runs independently but shares resources like memory, allowing tasks to be performed simultaneously. This helps improve performance by utilizing multiple CPU cores efficiently) for real-time simulation and visualization. With multithreading, we can change the speed of the simulation dynamically(i.e. while the simulation is running). Also, we've added the feature of "resume" and "pause" pathfinding and pathtracing in our application, which makes it useful for teaching and learning purposes! There's a crucial 'Comparison' tab which has a table for comparing algorithms vased on 'visited nodes', 'time taken to find the path', 'grid's size', etc.
+Apart from using Qt data types, we've used multithreading (a technique where a program is divided into smaller units of execution called threads. Each thread runs independently but shares resources like memory, allowing tasks to be performed simultaneously. This helps improve performance by utilizing multiple CPU cores efficiently) for real-time simulation and visualization. With multithreading, we can change the speed of the simulation dynamically(i.e. while the simulation is running).
+
+Also, we've added the feature of "resume" and "pause" pathfinding and pathtracing in our application, which makes it useful for teaching and learning purposes!
+
+There's a crucial 'Comparison' tab which has a table for comparing algorithms vased on 'visited nodes', 'time taken to find the path', 'grid's size', etc. And, this is automatically saved to a CSV file, which leaves the room open for data analysis.
 
 # GUI
 The GUI was created using Qt Creator. There are three main tabs:
