@@ -1,14 +1,17 @@
+// mainWindow.h
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QTimer>         // Add this
-#include <QElapsedTimer>// Add this
-#include <QTableWidget>   // Add this for QTableWidget
+#include <QTimer>
+#include <QElapsedTimer>
+#include <QTableWidget>
 #include <QTableWidgetItem>
 #include "GridView.h"
 #include "PathAlgorithm.h"
 #include "qlabel.h"
+#include <QFile>
+#include <QTextStream>
 
 QT_BEGIN_NAMESPACE
 
@@ -18,6 +21,9 @@ class MainWindow;
 }
 
 QT_END_NAMESPACE
+
+
+
 //structure to hold comparison data for each algorithm run
 struct AlgorithmComparisonData {
     QString algorithmName;
@@ -25,6 +31,9 @@ struct AlgorithmComparisonData {
     int     nodesVisited;
     int     pathLength;
     QString gridSize;
+    qreal   wallDensity;
+    int     numDeadEnds;
+    qreal   branchingFactor;
 };
 
 class MainWindow : public QMainWindow
@@ -32,10 +41,8 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-
     // Constructor
     MainWindow(QWidget *parent = nullptr);
-
     // Destructor
     virtual ~MainWindow();
 
@@ -53,7 +60,6 @@ public: Q_SIGNALS:
     //void launchedBFS();
 
 public slots:
-
     // Run the simulation and pause it
     void on_runButton_clicked();
 
@@ -61,9 +67,9 @@ public slots:
     void on_resetButton_clicked();
 
     // Generate button
-    void on_mazeButton_clicked();
+    void on_mazeButton_clicked(); // Renamed from on_mazeButton_released() for clarity
 
-    // Handles the different interactions changes
+    // Handles the different interaction changes
     void on_interactionBox_currentIndexChanged(int index);
 
     // Handles the different algorithm changes
@@ -73,39 +79,39 @@ public slots:
     void onAlgorithmCompleted();
 
     // Action to do when the pathfinding search completes (before visualization)
-    void onPathfindingSearchCompleted(int nodesVisited, int pathLength);
+    void onPathfindingSearchCompleted(int nodesVisited, int pathLength); // This slot will now only populate the list
 
 private slots:
     void on_dialWidth_valueChanged(int value);
-
     void on_dialHeight_valueChanged(int value);
-
     void on_sliderMarker_valueChanged(int value);
-
     void on_sliderMarker_sliderReleased();
-
     void on_dialWidth_sliderReleased();
-
     void on_dialHeight_sliderReleased();
-
-    void on_mazeButton_released();
-
     void on_speedSpinBox_valueChanged(int arg1);
+    void updateElapsedTime(); // slot for timer updates
 
-    void updateElapsedTime(); // New slot for timer updates
+    void on_clearComparisonButton_clicked(); // Slot for clearing all comparison data
+    void on_deleteSelectedRowButton_clicked(); // Slot for deleting a selected row
 
-    void on_clearComparisonButton_clicked(); // NEW: Slot for clearing all comparison data
-    void on_deleteSelectedRowButton_clicked(); // NEW: Slot for deleting a selected row
+    // Slot to receive and process extracted maze features (and predict difficulty)
+    void extractAndExportMazeFeatures(int nodesVisited, int pathLength);
+
 private:
-
     Ui::MainWindow* ui;
     GridView gridView;
     PathAlgorithm pathAlgorithm;
-    QTimer* animationTimer;        // Declare QTimer
-    QElapsedTimer elapsedTimer;    // Declare QElapsedTimer
-    QLabel* timeDisplayLabel;   // Declare QLabel for time display
+    QTimer* animationTimer;
+    QElapsedTimer elapsedTimer;
+    QLabel* timeDisplayLabel;
 
-    qint64 pausedTimeOffset; // NEW: Stores time accumulated before pausing
-    QList<AlgorithmComparisonData> comparisonDataList; // NEW: To store comparison results
+    qint64 pausedTimeOffset;
+    QList<AlgorithmComparisonData> comparisonDataList;
+
+    // Function to export features to CSV
+    void exportFeaturesToCSV(const AlgorithmComparisonData& dataToExport);
+
+    // Function to update the QTableWidget with all current data
+    void updateComparisonTable();
 };
 #endif // MAINWINDOW_H
