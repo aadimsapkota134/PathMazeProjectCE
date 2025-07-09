@@ -55,7 +55,21 @@ public:
     int currentIndex;
 };
 
+// NEW: Struct to hold maze features for difficulty estimation
+struct MazeFeatures {
+    int gridWidth;
+    int gridHeight;
+    float wallDensity;
+    int shortestPathLength;
+    int nodesVisited;
+    int numDeadEnds;
+    float branchingFactor;
 
+    // Default constructor
+    MazeFeatures() : gridWidth(0), gridHeight(0), wallDensity(0.0f),
+        shortestPathLength(0), nodesVisited(0),
+        numDeadEnds(0), branchingFactor(0.0f) {}
+};
 
 // Converting point coordinates to index
 int coordToIndex(const QPointF& point, int widthGrid);
@@ -130,6 +144,11 @@ public:
 public:
     // Add this new function declaration:
     void setupNodes();
+    // NEW: Feature extraction methods
+    float calculateWallDensity() const;
+    int countDeadEnds() const;
+    float calculateBranchingFactor() const;
+
 public Q_SLOTS:
 
     // Event handleClickedPoint
