@@ -736,3 +736,90 @@ int GridView::getPathLength() const
 
     return 0; // The actual path length will be calculated and passed by PathAlgorithm
 }
+//  Feature extraction methods for GridView
+float GridView::calculateWallDensity() const {
+    int totalCells = widthGrid * heightGrid;
+    if (totalCells == 0) return 0.0f;
+
+    int wallCells = 0;
+    for (const Node& node : gridNodes.Nodes) {
+        if (node.obstacle) {
+            wallCells++;
+        }
+    }
+    return static_cast<float>(wallCells) / totalCells; //by the definition of wall density
+}
+
+int GridView::countDeadEnds() const {
+    int deadEnds = 0;
+    for (const Node& node : gridNodes.Nodes) {
+        if (node.obstacle) {
+            continue; // Obstacles are not dead ends
+        }
+
+        int wallCount = 0;
+        // Check 4-directional neighbors
+        int dx[] = {0, 0, 1, -1};
+        int dy[] = {1, -1, 0, 0};
+
+        for (int i = 0; i < 4; ++i) {
+            int neighborX = node.xCoord + dx[i];
+            int neighborY = node.yCoord + dy[i];
+
+            // Check if neighbor is out of bounds (considered a wall)
+            if (neighborX < 1 || neighborX > widthGrid ||
+                neighborY < 1 || neighborY > heightGrid) {
+                wallCount++;
+            } else {
+                // Check if neighbor is an obstacle
+                int neighborIndex = coordToIndex(neighborX, neighborY, widthGrid);
+                if (gridNodes.Nodes[neighborIndex].obstacle) {
+                    wallCount++;
+                }
+            }
+        }
+
+        // A dead end is a non-wall cell with 3 walls/boundaries around it
+        if (wallCount == 3) {
+            deadEnds++;
+        }
+    }
+    return deadEnds;
+}
+
+float GridView::calculateBranchingFactor() const {
+    int totalNeighbors = 0;
+    int nonWallCells = 0;
+
+    for (const Node& node : gridNodes.Nodes) {
+        if (node.obstacle) {
+            continue; // Only consider non-wall cells
+        }
+        nonWallCells++;
+
+        int currentNeighbors = 0;
+        // Check 4-directional neighbors
+        int dx[] = {0, 0, 1, -1};
+        int dy[] = {1, -1, 0, 0};
+
+        for (int i = 0; i < 4; ++i) {
+            int neighborX = node.xCoord + dx[i];
+            int neighborY = node.yCoord + dy[i];
+
+            // Check if neighbor is within bounds and not an obstacle
+            if (neighborX >= 1 && neighborX <= widthGrid &&
+                neighborY >= 1 && neighborY <= heightGrid) {
+                int neighborIndex = coordToIndex(neighborX, neighborY, widthGrid);
+                if (!gridNodes.Nodes[neighborIndex].obstacle) {
+                    currentNeighbors++;
+                }
+            }
+        }
+        totalNeighbors += currentNeighbors;
+    }
+
+    if (nonWallCells == 0) {
+        return 0.0f;
+    }
+    return static_cast<float>(totalNeighbors) / nonWallCells;
+}
