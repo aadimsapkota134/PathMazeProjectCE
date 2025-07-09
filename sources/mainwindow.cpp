@@ -1,8 +1,10 @@
-#include <iostream>
+#include <iostream> // Consider removing if not directly used for std::cout/cin
 #include <QChartView>
 #include <QMessageBox>
-#include <QLabel>         
+#include <QLabel>         // Include QLabel
 #include <QTime>
+#include <QFile>          // For CSV export
+#include <QTextStream>    // For CSV export
 #include "mainWindow.h"
 #include "ui_mainWindow.h"
 #include "GridView.h"
@@ -70,11 +72,16 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     // Connecting the end signal of path planning to the window
     connect(&pathAlgorithm, &PathAlgorithm::algorithmCompleted, this, &MainWindow::onAlgorithmCompleted);
-    // NEW: Connect signal for pathfinding search completion (for timer stop)
+    //Connecting signal for pathfinding search completion (for timer stop)
     connect(&pathAlgorithm, &PathAlgorithm::pathfindingSearchCompleted, this, &MainWindow::onPathfindingSearchCompleted);
+
+    // Connect pathfinding search completed to feature extraction
+    connect(&pathAlgorithm, &PathAlgorithm::pathfindingSearchCompleted, this, &MainWindow::extractAndExportMazeFeatures);
+
+
     // --- Timer Setup ---
     animationTimer = new QTimer(this); // Initialize the QTimer
-    // Connect the timer's timeout signal to our new slot for updating the display
+    // Connecting the timer's timeout signal to our new slot for updating the display
     connect(animationTimer, &QTimer::timeout, this, &MainWindow::updateElapsedTime);
     animationTimer->setInterval(10); // Set update frequency to every 10 milliseconds (0.01 seconds)
 
@@ -85,19 +92,79 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     ui->hLayout->addWidget(timeDisplayLabel); // Add the label to your existing horizontal layout
     pausedTimeOffset = 0; //initialize paused time offset
 
-    // NEW: Connect the clear comparison button
+    // Connect the clear comparison button
     connect(ui->clearComparisonButton, &QPushButton::clicked, this, &MainWindow::on_clearComparisonButton_clicked);
 
     QPushButton* deleteRowButton = new QPushButton("Delete Selected Row", this);
-    ui->verticalLayout_2->addWidget(deleteRowButton); // Add to the comparisonTab's vertical layout
+    ui->verticalLayout_2->addWidget(deleteRowButton); // in the comparisonTab's vertical layout
     connect(deleteRowButton, &QPushButton::clicked, this, &MainWindow::on_deleteSelectedRowButton_clicked);
 }
 
-MainWindow::~MainWindow()
+
+MainWindow::~MainWindow() //destructor
 {
     delete ui;
     delete animationTimer; // Clean up timer
     // timeDisplayLabel is a child of centralWidget, so it will be deleted automatically
+}
+
+void MainWindow::onPathfindingSearchCompleted(int nodesVisited, int pathLength)
+{
+    // Stop the animation timer
+    animationTimer->stop();
+
+    // Calculate the total elapsed time
+    qint64 totalElapsedTime = pausedTimeOffset + elapsedTimer.elapsed();
+
+    // Create a new AlgorithmComparisonData entry
+    AlgorithmComparisonData data;
+    data.algorithmName = ui->algorithmsBox->currentText(); // Get the name of the selected algorithm
+    data.timeElapsedMs = totalElapsedTime;
+    data.nodesVisited = nodesVisited;
+    data.pathLength = pathLength;
+    data.gridSize = QString("%1x%2").arg(gridView.widthGrid).arg(gridView.heightGrid); // Initialize with current grid size
+    // For wallDensity, numDeadEnds, and branchingFactor, these will be updated in extractAndExportMazeFeatures
+    data.wallDensity = 0.0; // Placeholder
+    data.numDeadEnds = 0;   // Placeholder
+    data.branchingFactor = 0.0; // Placeholder
+
+
+    comparisonDataList.append(data);
+
+    // Update the comparison table immediately with the initial data
+    updateComparisonTable();
+
+    // The extractAndExportMazeFeatures slot is already connected to pathfindingSearchCompleted
+    // and will further populate/update the entry with maze specific features and prediction.
+}
+
+// Setup the comparison table
+void MainWindow::setupComparisonTable()
+{
+    ui->comparisonTable->setColumnCount(8); // Algorithm, Time, Nodes Visited, Path Length, Grid Size
+    QStringList headers;
+    headers << "Algorithm" << "Time (s)" << "Nodes Visited" << "Path Length" << "Grid Size"<< "Wall Density" << "Dead Ends" << "Branching Factor";
+    ui->comparisonTable->setHorizontalHeaderLabels(headers);
+    ui->comparisonTable->horizontalHeader()->setStretchLastSection(true);
+    ui->comparisonTable->setSelectionBehavior(QAbstractItemView::SelectRows); // Select entire rows
+    ui->comparisonTable->setSelectionMode(QAbstractItemView::SingleSelection); // Allow single row selection
+}
+
+// NEW: Function to update the QTableWidget with all data from comparisonDataList
+void MainWindow::updateComparisonTable()
+{
+    ui->comparisonTable->setRowCount(comparisonDataList.size()); // Set row count to match data list size
+    for (int i = 0; i < comparisonDataList.size(); ++i) {
+        const AlgorithmComparisonData& data = comparisonDataList.at(i);
+        ui->comparisonTable->setItem(i, 0, new QTableWidgetItem(data.algorithmName));
+        ui->comparisonTable->setItem(i, 1, new QTableWidgetItem(QString::number(data.timeElapsedMs / 1000.0, 'f', 3))); // Display in seconds
+        ui->comparisonTable->setItem(i, 2, new QTableWidgetItem(QString::number(data.nodesVisited)));
+        ui->comparisonTable->setItem(i, 3, new QTableWidgetItem(QString::number(data.pathLength)));
+        ui->comparisonTable->setItem(i, 4, new QTableWidgetItem(data.gridSize));
+        ui->comparisonTable->setItem(i, 5, new QTableWidgetItem(QString::number(data.wallDensity, 'f', 4)));
+        ui->comparisonTable->setItem(i, 6, new QTableWidgetItem(QString::number(data.numDeadEnds)));
+        ui->comparisonTable->setItem(i, 7, new QTableWidgetItem(QString::number(data.branchingFactor, 'f', 4)));
+    }
 }
 
 void MainWindow::setupInteractionComboBox()
@@ -121,7 +188,7 @@ void MainWindow::setupAlgorithmsComboBox()
     ui->algorithmsBox->setPlaceholderText(QStringLiteral("--Select Algorithm--"));
     ui->algorithmsBox->setCurrentIndex(-1);
 
-    // Adding first interation: BFS
+    //algos used
     ui->algorithmsBox->addItem("BFS Algorithm");
     ui->algorithmsBox->addItem("DFS Algorithm");
     ui->algorithmsBox->addItem("Dijkstra's Algorithm");
@@ -139,7 +206,7 @@ void MainWindow::setupGridView(QString gridViewName)
     // Setup nodes in GridView
     gridView.setupNodes(); // This creates and populates gridView.gridNodes.Nodes
 
-    // CRITICAL: Now pass the updated grid data and dimensions to PathAlgorithm
+    // passing the updated grid data and dimensions to PathAlgorithm
     pathAlgorithm.setGridNodes(gridView.gridNodes, gridView.widthGrid, gridView.heightGrid);
     // This is crucial for a clean visualization when grid changes
     gridView.chart->removeAllSeries();
@@ -157,17 +224,7 @@ void MainWindow::setupGridView(QString gridViewName)
 
 }
 
-// Setup the comparison table
-void MainWindow::setupComparisonTable()
-{
-    ui->comparisonTable->setColumnCount(5); // Algorithm, Time, Nodes Visited, Path Length, Grid Size
-    QStringList headers;
-    headers << "Algorithm" << "Time (s)" << "Nodes Visited" << "Path Length" << "Grid Size";
-    ui->comparisonTable->setHorizontalHeaderLabels(headers);
-    ui->comparisonTable->horizontalHeader()->setStretchLastSection(true);
-    ui->comparisonTable->setSelectionBehavior(QAbstractItemView::SelectRows); // Select entire rows
-    ui->comparisonTable->setSelectionMode(QAbstractItemView::SingleSelection); // Allow single row selection
-}
+
 
 GridView& MainWindow::getGridView()
 {
@@ -252,7 +309,10 @@ void MainWindow::on_mazeButton_clicked()
     // Enabling the current QScatter series point as visible
     gridView.AlgorithmView(true);
 
-
+    // Reset elapsed timer and paused offset for maze generation
+    pausedTimeOffset = 0; // <--- This is the crucial line added/ensured
+    elapsedTimer.start();
+    animationTimer->start();
 
     // Call path finding
     pathAlgorithm.runAlgorithm(gridView.getCurrentAlgorithm());
@@ -275,10 +335,7 @@ void MainWindow::on_resetButton_clicked()
     // Reset algorithm selection to NOALGO internally
     pathAlgorithm.setCurrentAlgorithm(NOALGO);
 
-    // Update the UI's algorithm selection combobox
-    // Assuming NOALGO corresponds to no selection or a specific "None" item.
-    // If you have a "None" or "No Algorithm" item in your algorithmsBox,
-    // find its index and set it. Otherwise, setting to -1 usually deselects.
+
     ui->algorithmsBox->setCurrentIndex(-1); // Deselects any algorithm in the combobox
 
     // Reset button text for run button
@@ -319,41 +376,95 @@ void MainWindow::onAlgorithmCompleted()
     ui->runButton->setChecked(false);
     ui->runButton->setText(QString("Start PathFinding")); // Consistent initial text
 
-   // gridView.setCurrentAlgorithm(ui->algorithmsBox->currentIndex());
+    // gridView.setCurrentAlgorithm(ui->algorithmsBox->currentIndex());
 
 
 }
-// NEW: Slot to handle when the pathfinding search itself completes
-void MainWindow::onPathfindingSearchCompleted(int nodesVisited, int pathLength) // <--- NEW SLOT IMPLEMENTATION
-{
-    animationTimer->stop(); // Stop the timer display
-    qint64 finalElapsedTime = pausedTimeOffset + elapsedTimer.elapsed(); // Calculate total time
-    timeDisplayLabel->setText(QString("Time: %1 s").arg(finalElapsedTime / 1000.0, 0, 'f', 3));
+// Slot to handle when the pathfinding search itself completes
+void MainWindow::extractAndExportMazeFeatures(int nodesVisited, int pathLength) {
+    float currentWallDensity = gridView.calculateWallDensity();
+    int currentNumDeadEnds = gridView.countDeadEnds();
+    float currentBranchingFactor = gridView.calculateBranchingFactor();
+    QString currentGridSize = QString("%1x%2").arg(gridView.widthGrid).arg(gridView.heightGrid);
 
-    // Only add to comparison table if it was a pathfinding algorithm, not maze generation
-    if (gridView.getCurrentAlgorithm() != BACKTRACK) {
-        AlgorithmComparisonData data;
-        data.algorithmName = ui->algorithmsBox->currentText();
-        data.timeElapsedMs = finalElapsedTime;
-        data.nodesVisited = nodesVisited;
-        data.pathLength = pathLength;
-        data.gridSize = QString("%1x%2").arg(gridView.widthGrid).arg(gridView.heightGrid);
-        comparisonDataList.append(data);
-        qDebug() << "Data added to comparison list.";
+    qDebug() << "Extracted Maze Features:";
+    qDebug() << "  Grid Size:" << currentGridSize;
+    qDebug() << "  Wall Density:" << QString::number(currentWallDensity, 'f', 4);
+    qDebug() << "  Shortest Path Length (from signal):" << pathLength;
+    qDebug() << "  Nodes Visited (from signal):" << nodesVisited;
+    qDebug() << "  Number of Dead Ends:" << currentNumDeadEnds;
+    qDebug() << "  Branching Factor:" << QString::number(currentBranchingFactor, 'f', 4);
 
-        // Add data to the QTableWidget
-        int row = ui->comparisonTable->rowCount();
-        ui->comparisonTable->insertRow(row);
+    // Always update the last entry, assuming onPathfindingSearchCompleted has already added one.
+    if (comparisonDataList.isEmpty()) {
+        qWarning() << "No algorithm data in list to update maze features to. This should not happen.";
+        return;
+    }
+    AlgorithmComparisonData& currentData = comparisonDataList.last();
 
-        ui->comparisonTable->setItem(row, 0, new QTableWidgetItem(data.algorithmName));
-        ui->comparisonTable->setItem(row, 1, new QTableWidgetItem(QString::number(data.timeElapsedMs / 1000.0, 'f', 3)));
-        ui->comparisonTable->setItem(row, 2, new QTableWidgetItem(QString::number(data.nodesVisited)));
-        ui->comparisonTable->setItem(row, 3, new QTableWidgetItem(QString::number(data.pathLength)));
-        ui->comparisonTable->setItem(row, 4, new QTableWidgetItem(data.gridSize));
+    // Update the maze-specific features and grid size
+    currentData.wallDensity = currentWallDensity;
+    currentData.numDeadEnds = currentNumDeadEnds;
+    currentData.branchingFactor = currentBranchingFactor;
+    currentData.gridSize = currentGridSize; // Ensure gridSize is updated here as well
 
-        qDebug() << "Data displayed in table.";
+    // If it was a maze generation, ensure the algorithm name is correctly set
+    if (gridView.getCurrentAlgorithm() == BACKTRACK) {
+        currentData.algorithmName = "Maze Generation";
+        // For maze generation, nodesVisited and pathLength from the signal are 0.
+        // If these were populated by onPathfindingSearchCompleted, keep them as 0.
+        currentData.nodesVisited = nodesVisited;
+        currentData.pathLength = pathLength;
+    }
+
+    // After adding/updating data in comparisonDataList, refresh the table
+    updateComparisonTable();
+
+    // --- CSV Export Logic ---
+    if (comparisonDataList.isEmpty()) {
+        qWarning() << "Cannot export to CSV: comparisonDataList is empty.";
+        return;
+    }
+    exportFeaturesToCSV(comparisonDataList.last()); // Pass the last (most recent) data entry
+}
+
+
+// Update the exportFeaturesToCSV function signature and implementation
+void MainWindow::exportFeaturesToCSV(const AlgorithmComparisonData& dataToExport) {
+    QFile file("maze_data.csv");
+    QTextStream stream(&file);
+
+    // Check if file exists to write header
+    if (!file.exists()) {
+        qDebug() << "maze_data.csv does not exist. Attempting to create and write header.";
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            // Updated header to include all new fields
+            stream << "Algorithm,TimeElapsedMs,NodesVisited,PathLength,GridSize,WallDensity,NumDeadEnds,BranchingFactor\n";
+            qDebug() << "Header written to maze_data.csv successfully.";
+        } else {
+            qWarning() << "Could not open maze_data.csv for writing header. Error:" << file.errorString();
+            return;
+        }
+    }
+
+    // Append data
+    qDebug() << "Attempting to append data to maze_data.csv.";
+    if (file.open(QIODevice::Append | QIODevice::Text)) {
+        stream << dataToExport.algorithmName << ","
+               << dataToExport.timeElapsedMs << ","
+               << dataToExport.nodesVisited << ","
+               << dataToExport.pathLength << ","
+               << dataToExport.gridSize << ","
+               << QString::number(dataToExport.wallDensity, 'f', 4) << ","
+               << dataToExport.numDeadEnds << ","
+               << QString::number(dataToExport.branchingFactor, 'f', 4);
+         file.close();
+        qDebug() << "Maze features appended to maze_data.csv successfully.";
+    } else {
+        qWarning() << "Could not open maze_data.csv for appending data. Error:" << file.errorString();
     }
 }
+
 
 void MainWindow::on_dialWidth_valueChanged(int value)
 {
@@ -406,10 +517,6 @@ void MainWindow::on_dialHeight_sliderReleased()
 }
 
 
-void MainWindow::on_mazeButton_released()
-{
-// The main logic for maze generation is in on_mazeButton_clicked().
-}
 
 
 void MainWindow::on_speedSpinBox_valueChanged(int arg1)
@@ -422,7 +529,7 @@ void MainWindow::updateElapsedTime()
     timeDisplayLabel->setText(QString("Time: %1 s").arg(elapsed / 1000.0, 0, 'f', 3)); // Display in seconds with 3 decimal places
 }
 
-// NEW: Slot to clear all comparison data
+//  Slot to clear all comparison data
 void MainWindow::on_clearComparisonButton_clicked()
 {
     comparisonDataList.clear(); // Clear the internal list
@@ -430,7 +537,7 @@ void MainWindow::on_clearComparisonButton_clicked()
     QMessageBox::information(this, "Comparison Table", "All comparison data cleared.");
 }
 
- Slot to delete a selected row
+// NEW: Slot to delete a selected row
 void MainWindow::on_deleteSelectedRowButton_clicked()
 {
     QModelIndexList selectedRows = ui->comparisonTable->selectionModel()->selectedRows();
