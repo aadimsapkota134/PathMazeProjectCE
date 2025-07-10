@@ -475,12 +475,6 @@ void PathAlgorithm::performDFSAlgorithm(QPromise<int>& promise)
     emit algorithmCompleted();
     qDebug() << "DFS: Algorithm completed (visualization done). Emitting algorithmCompleted()";
 }
-
-
-
-//dijkstra
-// In PathAlgorithm.cpp
-
 void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
 {
     qDebug() << "Dijkstra: Algorithm started in worker thread:" << QThread::currentThreadId();
@@ -493,6 +487,7 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
     // Reset node properties for a new run
     for(Node& node: gridNodes.Nodes)
     {
+        node.neighbours.clear();
         FillNeighboursNode(node); // Ensure neighbors are filled
         node.localGoal      = INFINITY;
         node.parent         = nullptr;
@@ -510,10 +505,9 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
 
     nodeStart->localGoal = 0.0f;
 
-    // Use std::priority_queue for Dijkstra for efficiency, or sort std::list
-    // For now, sticking with std::list and sorting as in your code, but a PQ is better.
-    std::list<Node*> nodesToTest;
-    nodesToTest.push_back(nodeStart);
+    // Use std::priority_queue for Dijkstra
+    std::priority_queue<Node*, std::vector<Node*>, CompareNodesDijkstra> nodesToTest;
+    nodesToTest.push(nodeStart);
 
     int nodesVisitedCount = 0; // Counter for visited nodes
 
@@ -526,18 +520,15 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
             return;
         }
 
-        nodesToTest.sort([](const Node* a, const Node* b){return a->localGoal < b->localGoal;});
-        // Remove visited nodes from the front (this is inefficient with std::list, better with PQ)
-        while(!nodesToTest.empty() && nodesToTest.front()->visited) {
-            nodesToTest.pop_front();
-        }
-        if (nodesToTest.empty()) {
-            break;
+        Node* nodeCurrent = nodesToTest.top();
+        nodesToTest.pop();
+
+        // If this node has already been visited (meaning we found a shorter path to it earlier), skip it.
+        if (nodeCurrent->visited) {
+            continue;
         }
 
-        Node* nodeCurrent = nodesToTest.front();
-        nodesToTest.pop_front(); // Remove from open list
-        nodeCurrent->visited = true; // Mark as visited
+        nodeCurrent->visited = true; // Mark as visited after extracting from PQ
         nodesVisitedCount++; // Increment when a node is processed (removed from open list)
 
         int indexCurrent = coordToIndex(nodeCurrent->xCoord, nodeCurrent->yCoord, widthGrid);
@@ -560,13 +551,12 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
                     nodeNeighbour->parent = nodeCurrent;
                     nodeNeighbour->localGoal = potentialLowerGoal;
 
-                    // If not visited, add to nodesToTest (or update in PQ)
-                    if (!nodeNeighbour->visited) {
-                        nodesToTest.push_back(nodeNeighbour);
-                        // Only emit NEXT if it's not the end node
-                        if (nodeNeighbour != nodeEnd) {
-                            emit updatedScatterGridView(NEXT, coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid));
-                        }
+                    // Always push to PQ if a better path is found, even if potentially "visited" by a longer path
+                    nodesToTest.push(nodeNeighbour);
+
+                    // Only emit NEXT if it's not the end node and it hasn't been visited in a finalized path yet
+                    if (!nodeNeighbour->visited && nodeNeighbour != nodeEnd) {
+                        emit updatedScatterGridView(NEXT, coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid));
                     }
                 }
             }
@@ -604,7 +594,7 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
         emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
     }else{ // No path found
-        endReached = false; // Or keep as -1 as you had, but false is more consistent for boolean
+        endReached = false;
         emit pathfindingSearchCompleted(nodesVisitedCount, 0);
         qDebug() << "Dijkstra: Pathfinding search not found. Emitting pathfindingSearchCompleted()";
     }
@@ -619,7 +609,6 @@ void PathAlgorithm::performDijkstraAlgorithm(QPromise<int>& promise)
     qDebug() << "Dijkstra: Algorithm completed (visualization done). Emitting algorithmCompleted()";
 }
 
-// In PathAlgorithm.cpp
 
 void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
 {
@@ -633,6 +622,7 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
     // Reset node properties for a new run
     for(Node& node: gridNodes.Nodes)
     {
+        node.neighbours.clear();
         FillNeighboursNode(node);
         node.globalGoal     = INFINITY;
         node.localGoal      = INFINITY;
@@ -646,7 +636,10 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
                      +(a->yCoord - b->yCoord) * (a->yCoord - b->yCoord));
     };
 
-    auto heuristic = [distance](Node* a, Node* b){return distance(a, b);};
+    // Improved heuristic for 4-directional grid: Manhattan Distance
+    auto heuristic = [](Node* a, Node* b){
+        return fabsf(a->xCoord - b->xCoord) + fabsf(a->yCoord - b->yCoord);
+    };
 
     Node* nodeStart = &(gridNodes.Nodes[gridNodes.startIndex]);
     Node* nodeEnd = &(gridNodes.Nodes[gridNodes.endIndex]);
@@ -654,9 +647,9 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
     nodeStart->localGoal = 0.0f;
     nodeStart->globalGoal = heuristic(nodeStart, nodeEnd);
 
-    // Use std::priority_queue for A* for efficiency, or sort std::list
-    std::list<Node*> nodesToTest; // This acts as your open set
-    nodesToTest.push_back(nodeStart);
+    // Use std::priority_queue for A*
+    std::priority_queue<Node*, std::vector<Node*>, CompareNodesAStar> nodesToTest;
+    nodesToTest.push(nodeStart);
 
     int nodesVisitedCount = 0; // Counter for visited nodes
 
@@ -669,19 +662,15 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
             return;
         }
 
-        // Sort by globalGoal (f-score)
-        nodesToTest.sort([](const Node* a, const Node* b){return a->globalGoal < b->globalGoal;});
-        // Remove visited nodes from the front (again, inefficient with list, better with PQ)
-        while(!nodesToTest.empty() && nodesToTest.front()->visited) {
-            nodesToTest.pop_front();
-        }
-        if (nodesToTest.empty()) {
-            break;
+        Node* nodeCurrent = nodesToTest.top();
+        nodesToTest.pop();
+
+        // If this node has already been visited (meaning we found a shorter path to it earlier), skip it.
+        if (nodeCurrent->visited) {
+            continue;
         }
 
-        Node* nodeCurrent = nodesToTest.front();
-        nodesToTest.pop_front(); // Remove from open list
-        nodeCurrent->visited = true; // Mark as visited
+        nodeCurrent->visited = true; // Mark as visited after extracting from PQ
         nodesVisitedCount++; // Increment when a node is processed (removed from open list)
 
         int indexCurrent = coordToIndex(nodeCurrent->xCoord, nodeCurrent->yCoord, widthGrid);
@@ -705,13 +694,12 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
                     nodeNeighbour->localGoal = potentialLowerGoal;
                     nodeNeighbour->globalGoal = nodeNeighbour->localGoal + heuristic(nodeNeighbour, nodeEnd);
 
-                    // If not visited, add to nodesToTest (or update in PQ)
-                    if (!nodeNeighbour->visited) {
-                        nodesToTest.push_back(nodeNeighbour);
-                        // Only emit NEXT if it's not the end node
-                        if (nodeNeighbour != nodeEnd) {
-                            emit updatedScatterGridView(NEXT, coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid));
-                        }
+                    // Always push to PQ if a better path is found, even if potentially "visited" by a longer path
+                    nodesToTest.push(nodeNeighbour);
+
+                    // Only emit NEXT if it's not the end node and it hasn't been visited in a finalized path yet
+                    if (!nodeNeighbour->visited && nodeNeighbour != nodeEnd) {
+                        emit updatedScatterGridView(NEXT, coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid));
                     }
                 }
             }
@@ -765,7 +753,6 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
 }
 
 // Maze generation
-// In PathAlgorithm.cpp
 
 void PathAlgorithm::performRecursiveBackTrackerAlgorithm(QPromise<int>& promise)
 {
