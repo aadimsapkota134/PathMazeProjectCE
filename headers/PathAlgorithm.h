@@ -60,8 +60,12 @@ public:
     void performDijkstraAlgorithm(QPromise<int>& promise);
     void performAStarAlgorithm(QPromise<int>& promise);
 
-    // Maze generation
+    // Maze generation using dfs
     void performRecursiveBackTrackerAlgorithm(QPromise<int>& promise);
+    //Maze generation using Prims
+    void performPrimsMazeAlgorithm(QPromise<int>& promise);
+    //maze generation using kruskal algorithm
+    void PathAlgorithm::performKruskalsMazeAlgorithm(QPromise<int>& promise)
 
     // Retrieving the neighbors of a point in a grid
     std::vector<Node> retrieveNeighborsGrid(const grid& gridNodes, const Node& currentNode, int widthGrid, int heightGrid);
