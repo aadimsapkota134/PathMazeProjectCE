@@ -893,6 +893,132 @@ void PathAlgorithm::performRecursiveBackTrackerAlgorithm(QPromise<int>& promise)
     emit pathfindingSearchCompleted(0,0);
     qDebug() << "Maze: Algorithm completed. Emitting algorithmCompleted() and pathfindingSearchCompleted()";
 }
+//maze generation using prims algorithm
+void PathAlgorithm::performPrimsMazeAlgorithm(QPromise<int>& promise)
+{
+    qDebug() << "Maze (Prim's): Algorithm started in worker thread:" << QThread::currentThreadId();
+
+    promise.suspendIfRequested();
+    if (promise.isCanceled()) {
+        emit pathfindingSearchCompleted(0, 0);
+        return;
+    }
+
+    // Step 1: Initialize all cells as obstacles
+    for (int index = 0; index < widthGrid * heightGrid; ++index) {
+        promise.suspendIfRequested();
+        if (promise.isCanceled()) {
+            emit pathfindingSearchCompleted(0, 0);
+            return;
+        }
+
+        if (index != gridNodes.startIndex && index != gridNodes.endIndex) {
+            gridNodes.Nodes[index].obstacle = true;
+            emit updatedScatterGridView(FREETOOBSTACLE, index);
+        }
+    }
+
+    std::vector<int> wallList;
+
+    // Step 2: Choose a random starting point (odd cell for better spacing)
+    int startX = (rand() % (widthGrid / 2)) * 2 + 1;
+    int startY = (rand() % (heightGrid / 2)) * 2 + 1;
+    int startIndex = coordToIndex(startX, startY, widthGrid);
+
+    Node& startNode = gridNodes.Nodes[startIndex];
+    startNode.obstacle = false;
+    startNode.visited = true;
+    emit updatedScatterGridView(OBSTACLETOFREE, startIndex);
+
+    // Add surrounding walls of starting cell to wall list
+    const std::vector<QPair<int, int>> directions = {
+        {2, 0}, {-2, 0}, {0, 2}, {0, -2}
+    };
+
+    for (auto dir : directions) {
+        int nx = startX + dir.first;
+        int ny = startY + dir.second;
+        if (nx >= 1 && nx < widthGrid - 1 && ny >= 1 && ny < heightGrid - 1) {
+            wallList.push_back(coordToIndex(nx, ny, widthGrid));
+        }
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Initial delay for visualization
+
+    // Step 3: Loop until wall list is empty
+    while (!wallList.empty()) {
+        promise.suspendIfRequested();
+        if (promise.isCanceled()) {
+            emit pathfindingSearchCompleted(0, 0);
+            return;
+        }
+
+        // Random wall from wall list
+        int randomWallIndex = wallList[rand() % wallList.size()];
+        Node& wallNode = gridNodes.Nodes[randomWallIndex];
+        int wx = wallNode.xCoord;
+        int wy = wallNode.yCoord;
+
+        // Find neighbor 2 steps in all directions
+        std::vector<std::pair<int, int>> candidates;
+        for (auto dir : directions) {
+            int nx = wx + dir.first;
+            int ny = wy + dir.second;
+            if (nx >= 1 && nx < widthGrid - 1 && ny >= 1 && ny < heightGrid - 1) {
+                int neighborIndex = coordToIndex(nx, ny, widthGrid);
+                if (!gridNodes.Nodes[neighborIndex].visited) {
+                    candidates.push_back({nx, ny});
+                }
+            }
+        }
+
+        if (!candidates.empty()) {
+            // Choose one unvisited neighbor
+            auto [nx, ny] = candidates[rand() % candidates.size()];
+            int neighborIndex = coordToIndex(nx, ny, widthGrid);
+            Node& neighbor = gridNodes.Nodes[neighborIndex];
+
+            // Mark neighbor as part of maze
+            neighbor.visited = true;
+            neighbor.obstacle = false;
+            emit updatedScatterGridView(OBSTACLETOFREE, neighborIndex);
+
+            // Carve path between wall and neighbor (center cell between them)
+            int midX = (wx + nx) / 2;
+            int midY = (wy + ny) / 2;
+            int midIndex = coordToIndex(midX, midY, widthGrid);
+            gridNodes.Nodes[midIndex].obstacle = false;
+            emit updatedScatterGridView(OBSTACLETOFREE, midIndex);
+
+            // Add neighbor's surrounding walls to wall list
+            for (auto dir : directions) {
+                int nnx = nx + dir.first;
+                int nny = ny + dir.second;
+                if (nnx >= 1 && nnx < widthGrid - 1 && nny >= 1 && nny < heightGrid - 1) {
+                    int wallNeighborIndex = coordToIndex(nnx, nny, widthGrid);
+                    if (gridNodes.Nodes[wallNeighborIndex].obstacle && !gridNodes.Nodes[wallNeighborIndex].visited) {
+                        wallList.push_back(wallNeighborIndex);
+                    }
+                }
+            }
+        }
+
+        // Remove the wall from the list (processed)
+        wallList.erase(std::remove(wallList.begin(), wallList.end(), randomWallIndex), wallList.end());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+    }
+
+    // Reset visited flags for pathfinding
+    for (Node& node : gridNodes.Nodes) {
+        node.visited = false;
+        node.nextUp = false;
+    }
+
+    emit algorithmCompleted();
+    emit pathfindingSearchCompleted(0, 0);
+    qDebug() << "Maze (Prim's): Algorithm completed.";
+}
 
 
 
