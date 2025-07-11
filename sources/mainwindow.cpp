@@ -1,4 +1,3 @@
-#include <iostream> // Consider removing if not directly used for std::cout/cin
 #include <QChartView>
 #include<QPushButton>
 #include <QMessageBox>
@@ -119,7 +118,17 @@ void MainWindow::onPathfindingSearchCompleted(int nodesVisited, int pathLength)
 
     // Create a new AlgorithmComparisonData entry
     AlgorithmComparisonData data;
-    data.algorithmName = ui->algorithmsBox->currentText(); // Get the name of the selected algorithm
+    // Determine the correct algorithm name based on the currently running algorithm type
+    if (pathAlgorithm.getCurrentAlgorithm() == BACKTRACK) {
+        data.algorithmName = "Recursive Backtracker (Easy Maze)";
+    } else if (pathAlgorithm.getCurrentAlgorithm() == PRIMS) {
+        data.algorithmName = "Prims Algorithm (Medium Maze)";
+    } else if (pathAlgorithm.getCurrentAlgorithm() == KRUSKAL) {
+        data.algorithmName = "Kruskal's Algorithm (Hard Maze)";
+    } else {
+        // For pathfinding algorithms, use the combobox text
+        data.algorithmName = ui->algorithmsBox->currentText();
+    }
     data.timeElapsedMs = totalElapsedTime;
     data.nodesVisited = nodesVisited;
     data.pathLength = pathLength;
@@ -319,7 +328,9 @@ void MainWindow::on_mazeButton_clicked()
 }
 void MainWindow::generateMazeWithAlgorithm(int algorithmEnum)
 {
-    gridView.setCurrentAlgorithm(algorithmEnum);
+    pathAlgorithm.setCurrentAlgorithm(static_cast<ALGOS>(algorithmEnum)); // Set for PathAlgorithm
+    gridView.setCurrentAlgorithm(algorithmEnum); // Set for GridView (for internal logic if needed)
+
     pathAlgorithm.running = true;
     pathAlgorithm.simulationOnGoing = true;
 
@@ -336,10 +347,9 @@ void MainWindow::generateMazeWithAlgorithm(int algorithmEnum)
     animationTimer->start();
 
     pathAlgorithm.runAlgorithm(static_cast<ALGOS>(algorithmEnum));
-    //Reset the algorithm so pathfinding doesn't rerun maze generation
-    pathAlgorithm.setCurrentAlgorithm(NOALGO);
-    gridView.setCurrentAlgorithm(NOALGO);
-
+    //Reset the algorithm so pathfinding doesn't rerun maze generation.This reset should ideally happen AFTER onPathfindingSearchCompleted has processed the signal
+    // pathAlgorithm.setCurrentAlgorithm(NOALGO);
+    // gridView.setCurrentAlgorithm(NOALGO);
 }
 
 
@@ -432,16 +442,6 @@ void MainWindow::extractAndExportMazeFeatures(int nodesVisited, int pathLength) 
     currentData.numDeadEnds = currentNumDeadEnds;
     currentData.branchingFactor = currentBranchingFactor;
     currentData.gridSize = currentGridSize; // Ensure gridSize is updated here as well
-
-    // If it was a maze generation, ensure the algorithm name is correctly set
-    if (gridView.getCurrentAlgorithm() == BACKTRACK) {
-        currentData.algorithmName = "Maze Generation";
-        // For maze generation, nodesVisited and pathLength from the signal are 0.
-        // If these were populated by onPathfindingSearchCompleted, keep them as 0.
-        currentData.nodesVisited = nodesVisited;
-        currentData.pathLength = pathLength;
-    }
-
     // After adding/updating data in comparisonDataList, refresh the table
     updateComparisonTable();
 
@@ -482,8 +482,8 @@ void MainWindow::exportFeaturesToCSV(const AlgorithmComparisonData& dataToExport
                << dataToExport.gridSize << ","
                << QString::number(dataToExport.wallDensity, 'f', 4) << ","
                << dataToExport.numDeadEnds << ","
-               << QString::number(dataToExport.branchingFactor, 'f', 4);
-         file.close();
+               << QString::number(dataToExport.branchingFactor, 'f', 4) << "\n";
+        file.close();
         qDebug() << "Maze features appended to maze_data.csv successfully.";
     } else {
         qWarning() << "Could not open maze_data.csv for appending data. Error:" << file.errorString();
