@@ -4,6 +4,7 @@ CONFIG += c++17
 
 SOURCES += \
     sources/GridView.cpp \
+    sources/MazeGenerator.cpp \
     sources/PathAlgorithm.cpp \
     sources/main.cpp \
     sources/mainWindow.cpp
