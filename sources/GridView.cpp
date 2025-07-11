@@ -386,8 +386,6 @@ void GridView::handleClickedPoint(const QPointF& point)
     int clickedIndex = coordToIndex(clickedPoint, widthGrid);
     std::cerr << "clickedIndex: " << clickedIndex << "\n";
 
-    // Flag to indicate if grid was modified
-    bool gridModifiedFlag = false;
 
     // If the user choose to insert obstacles
     if (currentInteraction == OBST)
@@ -401,7 +399,6 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // Updating point as an obstacle in backend grid
             gridNodes.Nodes[clickedIndex].obstacle = true;
-            gridModifiedFlag = true;
 
         } else // the clicked point is an obstacle
         {
@@ -411,7 +408,6 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // Updating point as a free element in the backend grid
             gridNodes.Nodes[clickedIndex].obstacle = false;
-            gridModifiedFlag = true;
         }
 
     } else if (currentInteraction == START)
@@ -441,7 +437,6 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // Making sure the previous point is set as free in the backend grid
             gridNodes.Nodes[previousStartGridIndex].obstacle = false;
-            gridModifiedFlag = true;
 
         } else  // the clicked point is an obstacle
         {
@@ -459,7 +454,6 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // Making sure the point is set as an obstacle in the backend grid
             gridNodes.Nodes[previousStartGridIndex].obstacle = true;
-            gridModifiedFlag = true;
         }
         std::cerr << "new start element: (" << startElement->points()[0].x() << ", " << startElement->points()[0].y() << ")\n";
 
@@ -493,7 +487,6 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // Making sure the previous end point is set as free in the backend grid
             gridNodes.Nodes[previousEndGridIndex].obstacle = false;
-            gridModifiedFlag = true;
 
         } else  // the clicked point is an obstacle
         {
@@ -508,7 +501,6 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // Making sure the previous end point is set as obstacle in the backend grid
             gridNodes.Nodes[previousEndGridIndex].obstacle = true;
-            gridModifiedFlag = true;
         }
         std::cerr << "new end element: (" << endElement->points()[0].x() << ", " << endElement->points()[0].y() << ")\n";
 
