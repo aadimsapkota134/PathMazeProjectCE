@@ -15,9 +15,9 @@ The algorithms implemented here are the following:
 ## Maze Generation Algorthims
 The algorithms for maze generation are implemented prompting the user to choose between: 'easy', 'medium' or 'hard'.
 
-*Recursive Backtrack(DFS) : Easy
-*Prim's Algorithm : Medium
-*Kruskal's algorithm : Hard
+* Recursive Backtrack(DFS) : Easy
+* Prim's Algorithm : Medium
+* Kruskal's algorithm : Hard
 
 <img width="574" height="258" alt="image" src="https://github.com/user-attachments/assets/94f179de-b13b-405e-9062-df7e03dea5c3" />
 
