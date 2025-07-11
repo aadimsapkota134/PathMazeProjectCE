@@ -49,6 +49,7 @@ Increasing the number of nodes horizontally and vertically, and changing the siz
 ### Comparison
 Comparing all the algorithms with each other, also, comparing an algorithm in different grid sizes.
 ![image](https://github.com/user-attachments/assets/73d7ba88-b82a-48f6-98ef-0683eb8dcb8e)
+
 User can delete any selected row at once, or clear the entire rows at once. This deletion is only for the comparison table, not the CSV file itself.
 
 Feel free to contact me at aadimsapkota0@gmail.com for any details or enquiries regarding our project.
