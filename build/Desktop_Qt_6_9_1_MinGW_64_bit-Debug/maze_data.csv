@@ -1,0 +1,2 @@
+Algorithm,TimeElapsedMs,NodesVisited,PathLength,GridSize,WallDensity,NumDeadEnds,BranchingFactor
+DFS Algorithm,4618,297,149,30x30,0.4989,25,0.6662

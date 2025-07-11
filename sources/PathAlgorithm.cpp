@@ -805,7 +805,7 @@ void PathAlgorithm::performRecursiveBackTrackerAlgorithm(QPromise<int>& promise)
         }
 
         Node* currentNode = stackUnVisitedNodes.top();
-        int currentIndex = coordToIndex(currentNode->xCoord, currentNode->yCoord, widthGrid);
+        //int currentIndex = coordToIndex(currentNode->xCoord, currentNode->yCoord, widthGrid);
         std::vector<int> availableNeighboursDirections; // 0:East, 1:South, 2:West, 3:North
 
         // Check potential neighbors (2 steps away for carving)
