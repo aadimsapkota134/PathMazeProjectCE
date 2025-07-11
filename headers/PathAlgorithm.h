@@ -65,7 +65,7 @@ public:
     //Maze generation using Prims
     void performPrimsMazeAlgorithm(QPromise<int>& promise);
     //maze generation using kruskal algorithm
-    void PathAlgorithm::performKruskalsMazeAlgorithm(QPromise<int>& promise)
+    void performKruskalsMazeAlgorithm(QPromise<int>& promise);
 
     // Retrieving the neighbors of a point in a grid
     std::vector<Node> retrieveNeighborsGrid(const grid& gridNodes, const Node& currentNode, int widthGrid, int heightGrid);
@@ -79,7 +79,11 @@ public: Q_SIGNALS:
 
     void algorithmCompleted(); // Emitted after visualization (e.g., for maze)
     void pathfindingSearchCompleted(int nodesVisited, int pathLength); // <--- NEW SIGNAL: Emitted when path is found, before visualization
-
+private:
+    // Helper functions
+    void addFrontierCells(Node* node, std::vector<Node*>& frontier);
+    std::vector<Node*> getMazeNeighbors(Node* node);
+    void connectNodes(Node* a, Node* b);
 public:
 
     ALGOS currentAlgorithm;

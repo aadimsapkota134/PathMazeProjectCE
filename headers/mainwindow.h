@@ -90,7 +90,7 @@ private slots:
     void on_dialHeight_sliderReleased();
     void on_speedSpinBox_valueChanged(int arg1);
     void updateElapsedTime(); // slot for timer updates
-
+    void generateMazeWithAlgorithm(int algorithmEnum);
     void on_clearComparisonButton_clicked(); // Slot for clearing all comparison data
     void on_deleteSelectedRowButton_clicked(); // Slot for deleting a selected row
 

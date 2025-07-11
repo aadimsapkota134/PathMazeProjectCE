@@ -1,5 +1,6 @@
 #include <iostream> // Consider removing if not directly used for std::cout/cin
 #include <QChartView>
+#include<QPushButton>
 #include <QMessageBox>
 #include <QLabel>         // Include QLabel
 #include <QTime>
@@ -294,29 +295,53 @@ void MainWindow::on_runButton_clicked()
 
 void MainWindow::on_mazeButton_clicked()
 {
-    gridView.setCurrentAlgorithm(BACKTRACK);
-    pathAlgorithm.running = true;
-    pathAlgorithm.simulationOnGoing = true; // Set to true for maze generation too
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("Select Maze Difficulty");
+    msgBox.setText("Choose maze difficulty level:");
 
-    // set the grid node of the path algorithm object;
+    QPushButton *easyButton = msgBox.addButton(tr("Easy"), QMessageBox::AcceptRole);
+    QPushButton *mediumButton = msgBox.addButton(tr("Medium"), QMessageBox::AcceptRole);
+    QPushButton *hardButton = msgBox.addButton(tr("Hard"), QMessageBox::AcceptRole);
+    QPushButton *cancelButton = msgBox.addButton(QMessageBox::Cancel);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == easyButton) {
+        generateMazeWithAlgorithm(BACKTRACK); // DFS recursive backtracking
+    } else if (msgBox.clickedButton() == mediumButton) {
+        generateMazeWithAlgorithm(PRIMS);
+    } else if (msgBox.clickedButton() == hardButton) {
+        generateMazeWithAlgorithm(KRUSKAL);
+    } else if(msgBox.clickedButton()==cancelButton) {
+        // Cancel clicked — do nothing
+        return;
+    }
+}
+void MainWindow::generateMazeWithAlgorithm(int algorithmEnum)
+{
+    gridView.setCurrentAlgorithm(algorithmEnum);
+    pathAlgorithm.running = true;
+    pathAlgorithm.simulationOnGoing = true;
+
+    // Update the pathAlgorithm's grid info
     pathAlgorithm.gridNodes = gridView.gridNodes;
     pathAlgorithm.heightGrid = gridView.heightGrid;
     pathAlgorithm.widthGrid = gridView.widthGrid;
 
-    // Blocking the interaction with the gridView
     gridView.setSimulationRunning(true);
-
-    // Enabling the current QScatter series point as visible
     gridView.AlgorithmView(true);
 
-    // Reset elapsed timer and paused offset for maze generation
-    pausedTimeOffset = 0; // <--- This is the crucial line added/ensured
+    pausedTimeOffset = 0;
     elapsedTimer.start();
     animationTimer->start();
 
-    // Call path finding
-    pathAlgorithm.runAlgorithm(gridView.getCurrentAlgorithm());
+    pathAlgorithm.runAlgorithm(static_cast<ALGOS>(algorithmEnum));
+    //Reset the algorithm so pathfinding doesn't rerun maze generation
+    pathAlgorithm.setCurrentAlgorithm(NOALGO);
+    gridView.setCurrentAlgorithm(NOALGO);
+
 }
+
 
 void MainWindow::on_resetButton_clicked()
 {
