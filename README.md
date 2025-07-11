@@ -25,11 +25,14 @@ The algorithms for maze generation are implemented prompting the user to choose 
 
 
 
-Apart from using Qt data types, we've used multithreading (a technique where a program is divided into smaller units of execution called threads. Each thread runs independently but shares resources like memory, allowing tasks to be performed simultaneously. This helps improve performance by utilizing multiple CPU cores efficiently) for real-time simulation and visualization. With multithreading, we can change the speed of the simulation dynamically(i.e. while the simulation is running).
+Apart from using Qt data types, we've used multithreading (a technique where a program is divided into smaller units of execution called threads. Each thread 
+runs independently but shares resources like memory, allowing tasks to be performed simultaneously. This helps improve performance by utilizing multiple CPU 
+cores efficiently) for real-time simulation and visualization. With multithreading, we can change the speed of the simulation dynamically(i.e. while the simulation is running).
 
 Also, we've added the feature of "resume" and "pause" pathfinding and pathtracing in our application, which makes it useful for teaching and learning purposes!
 
-There's a crucial 'Comparison' tab which has a table for comparing algorithms vased on 'visited nodes', 'time taken to find the path', 'grid's size', etc. And, this is automatically saved to a CSV file, which leaves the room open for data analysis.
+There's a crucial 'Comparison' tab which has a table for comparing algorithms vased on 'visited nodes', 'time taken to find the path', 'grid's size', etc. And, 
+this is automatically saved to a CSV file, which leaves the room open for data analysis.
 
 ## GUI
 The GUI was created using Qt Creator. There are three main tabs:
@@ -46,6 +49,7 @@ Increasing the number of nodes horizontally and vertically, and changing the siz
 ### Comparison
 Comparing all the algorithms with each other, also, comparing an algorithm in different grid sizes.
 ![image](https://github.com/user-attachments/assets/73d7ba88-b82a-48f6-98ef-0683eb8dcb8e)
+User can delete any selected row at once, or clear the entire rows at once. This deletion is only for the comparison table, not the CSV file itself.
 
 Feel free to contact me at aadimsapkota0@gmail.com for any details or enquiries regarding our project.
 
