@@ -386,6 +386,9 @@ void GridView::handleClickedPoint(const QPointF& point)
     int clickedIndex = coordToIndex(clickedPoint, widthGrid);
     std::cerr << "clickedIndex: " << clickedIndex << "\n";
 
+    // Flag to indicate if grid was modified
+    bool gridModifiedFlag = false;
+
     // If the user choose to insert obstacles
     if (currentInteraction == OBST)
     {
@@ -398,6 +401,7 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // Updating point as an obstacle in backend grid
             gridNodes.Nodes[clickedIndex].obstacle = true;
+            gridModifiedFlag = true;
 
         } else // the clicked point is an obstacle
         {
@@ -407,6 +411,7 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // Updating point as a free element in the backend grid
             gridNodes.Nodes[clickedIndex].obstacle = false;
+            gridModifiedFlag = true;
         }
 
     } else if (currentInteraction == START)
@@ -427,10 +432,16 @@ void GridView::handleClickedPoint(const QPointF& point)
         {
             // Modyfing StartElement QScatter Series
             startElement->replace(0, clickedPoint);
-            freeElements->replace(clickedPoint, previousStartElement);
+            if (previousStartGridIndex != gridNodes.endIndex) {
+            freeElements->replace(previousStartGridIndex, previousStartElement);
+            }
+            // Ensure the clicked point is removed from free/obstacle elements if it was there
+            freeElements->replace(clickedIndex, nullQPoint);
+            obstacleElements->replace(clickedIndex, nullQPoint);
 
             // Making sure the previous point is set as free in the backend grid
             gridNodes.Nodes[previousStartGridIndex].obstacle = false;
+            gridModifiedFlag = true;
 
         } else  // the clicked point is an obstacle
         {
@@ -438,10 +449,17 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // We add the starting point here and the previous start becomes an obstacle
             startElement->replace(0, clickedPoint);
-            obstacleElements->replace(clickedPoint, previousStartElement);
+            // If the previous start point was not the end point, convert it to obstacle
+            if (previousStartGridIndex != gridNodes.endIndex) {
+            obstacleElements->replace(previousStartGridIndex, previousStartElement);
+            }
+            // Ensure the clicked point is removed from free/obstacle elements if it was there
+            freeElements->replace(clickedIndex, nullQPoint);
+            obstacleElements->replace(clickedIndex, nullQPoint);
 
             // Making sure the point is set as an obstacle in the backend grid
             gridNodes.Nodes[previousStartGridIndex].obstacle = true;
+            gridModifiedFlag = true;
         }
         std::cerr << "new start element: (" << startElement->points()[0].x() << ", " << startElement->points()[0].y() << ")\n";
 
@@ -465,20 +483,32 @@ void GridView::handleClickedPoint(const QPointF& point)
 
             // We add the ending point here and the previous end becomes a free element
             endElement->replace(0, clickedPoint);
-            freeElements->replace(clickedPoint, previousEndElement);
+            // Replace the previous end point in freeElements, only if it wasn't the start point
+            if (previousEndGridIndex != gridNodes.startIndex) {
+                freeElements->replace(previousEndGridIndex, previousEndElement);
+            }
+            // Ensure the clicked point is removed from free/obstacle elements if it was there
+            freeElements->replace(clickedIndex, nullQPoint);
+            obstacleElements->replace(clickedIndex, nullQPoint);
 
             // Making sure the previous end point is set as free in the backend grid
             gridNodes.Nodes[previousEndGridIndex].obstacle = false;
-
+            gridModifiedFlag = true;
 
         } else  // the clicked point is an obstacle
         {
             // We add the ending point here and the previous end becomes a free element
             endElement->replace(previousEndElement, clickedPoint);
-            obstacleElements->replace(clickedPoint, previousEndElement);
+            if (previousEndGridIndex != gridNodes.startIndex) {
+                obstacleElements->replace(previousEndGridIndex, previousEndElement);
+            }
+            // Ensure the clicked point is removed from free/obstacle elements if it was there
+            freeElements->replace(clickedIndex, nullQPoint);
+            obstacleElements->replace(clickedIndex, nullQPoint);
 
             // Making sure the previous end point is set as obstacle in the backend grid
             gridNodes.Nodes[previousEndGridIndex].obstacle = true;
+            gridModifiedFlag = true;
         }
         std::cerr << "new end element: (" << endElement->points()[0].x() << ", " << endElement->points()[0].y() << ")\n";
 
@@ -490,6 +520,7 @@ void GridView::handleClickedPoint(const QPointF& point)
     {
         QMessageBox::information(this, "Information", "Please stop the simulation first");
     }
+
 
 }
 void GridView::setupNodes()
