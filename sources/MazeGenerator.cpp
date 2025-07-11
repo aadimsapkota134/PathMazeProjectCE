@@ -327,43 +327,13 @@ void PathAlgorithm::performKruskalsMazeAlgorithm(QPromise<int>& promise)
     for (int i = 0; i < widthGrid * heightGrid; ++i)
         parent[i] = i; // every cell initially its own parent
 
-    auto findSet = [&](int x) {
-        while (parent[x] != x) {
-            parent[x] = parent[parent[x]]; // Path compression
-            x = parent[x];
-        }
-        return x;
-    };
 
-    auto unionSet = [&](int a, int b) {
-        a = findSet(a);
-        b = findSet(b);
-        if (a != b) {
-            if (rank[a] < rank[b])
-                parent[a] = b;
-            else if (rank[b] < rank[a])
-                parent[b] = a;
-            else {
-                parent[b] = a;
-                rank[a]++;
-            }
-            return true;
-        }
-        return false;
-    };
 
-    // Step 3: Build walls list between adjacent odd-indexed cells
-    struct Wall {
-        int wallIndex;
-        int cell1Index;
-        int cell2Index;
-    };
-    std::vector<Wall> walls;
 
     const std::vector<QPair<int, int>> directions = {{2, 0}, {0, 2}}; // right and down
-
-    for (int y = 1; y < heightGrid - 1; y += 2) {
-        for (int x = 1; x < widthGrid - 1; x += 2) {
+    std::vector<Wall> walls;
+    for (int y = 1; y < heightGrid ; y += 2) {
+        for (int x = 1; x < widthGrid; x += 2) {
             int cellIndex = coordToIndex(x, y, widthGrid);
             for (auto dir : directions) {
                 int nx = x + dir.first;
@@ -379,12 +349,12 @@ void PathAlgorithm::performKruskalsMazeAlgorithm(QPromise<int>& promise)
         }
     }
 
-    // Step 4: Shuffle walls
+    //Shuffle walls
     std::random_device rd;
     std::mt19937 g(rd());
     std::shuffle(walls.begin(), walls.end(), g);
 
-    // Step 5: Carve paths by removing walls
+    //Carve paths by removing walls
     for (const Wall& wall : walls) {
         promise.suspendIfRequested();
         if (promise.isCanceled()) {
@@ -392,11 +362,11 @@ void PathAlgorithm::performKruskalsMazeAlgorithm(QPromise<int>& promise)
             return;
         }
 
-        int set1 = findSet(wall.cell1Index);
-        int set2 = findSet(wall.cell2Index);
+        int set1 = findSet(wall.cell1Index,parent);
+        int set2 = findSet(wall.cell2Index,parent);
 
         if (set1 != set2) {
-            unionSet(set1, set2);
+            unionSet(set1, set2,parent,rank);
 
             // Carve wall
             gridNodes.Nodes[wall.wallIndex].obstacle = false;
@@ -413,7 +383,7 @@ void PathAlgorithm::performKruskalsMazeAlgorithm(QPromise<int>& promise)
         }
     }
 
-    // Step 6: Reset visited/nextUp flags
+    //Reset visited/nextUp flags
     for (Node& node : gridNodes.Nodes) {
         node.visited = false;
         node.nextUp = false;
@@ -422,4 +392,28 @@ void PathAlgorithm::performKruskalsMazeAlgorithm(QPromise<int>& promise)
     emit algorithmCompleted();
     emit pathfindingSearchCompleted(0, 0);
     qDebug() << "Maze (Kruskal's): Algorithm completed.";
+}
+int findSet(int x,std::vector<int>& parent)
+{
+    if(parent[x]==x) return x;
+    return parent[x]=findSet(parent[x],parent);
+}
+
+bool unionSet(int a ,int b,std::vector<int> &parent,std::vector<int>& rank)
+{
+    a=findSet(a,parent);
+    b=findSet(b,parent);
+    if (a != b) {
+        if (rank[a] < rank[b])
+            parent[a] = b;
+        else if (rank[b] < rank[a])
+            parent[b] = a;
+        else {
+            parent[b] = a;
+            rank[a]++;
+        }
+        return true;
+    }
+    return false;
+
 }

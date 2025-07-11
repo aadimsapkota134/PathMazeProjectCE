@@ -25,7 +25,15 @@ struct CompareNodesAStar {
     }
 };
 
+//Build walls list between adjacent odd-indexed cells
+struct Wall {
+    int wallIndex;
+    int cell1Index;
+    int cell2Index;
+};
 
+bool unionSet(int a ,int b,std::vector<int> &parent,std::vector<int>& rank);
+    int findSet(int x,std::vector<int>& parent);
 class PathAlgorithm : public QObject
 {
 
