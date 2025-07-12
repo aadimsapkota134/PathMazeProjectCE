@@ -332,13 +332,13 @@ void PathAlgorithm::performKruskalsMazeAlgorithm(QPromise<int>& promise)
 
     const std::vector<QPair<int, int>> directions = {{2, 0}, {0, 2}}; // right and down
     std::vector<Wall> walls;
-    for (int y = 1; y < heightGrid ; y += 2) {
-        for (int x = 1; x < widthGrid; x += 2) {
+    for (int y = 1; y <= heightGrid ; y += 2) {
+        for (int x = 1; x <= widthGrid; x += 2) {
             int cellIndex = coordToIndex(x, y, widthGrid);
             for (auto dir : directions) {
                 int nx = x + dir.first;
                 int ny = y + dir.second;
-                if (nx < widthGrid && ny < heightGrid) {
+                if (nx <= widthGrid && ny <= heightGrid) {
                     int neighborIndex = coordToIndex(nx, ny, widthGrid);
                     int wallX = x + dir.first / 2;
                     int wallY = y + dir.second / 2;
