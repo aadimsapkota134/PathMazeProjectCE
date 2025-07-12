@@ -1,6 +1,8 @@
 # PathMazeProjectCE
-Computer Engineering students @ Kathmandu University
-Built with C++ using the Qt Framework and qmake in Qt Creator
+**`Second Semester Project`**  
+Computer Engineering students @ **`Kathmandu University`**  
+Built with **`C++`** using the **`Qt Framework`** and **`qmake`** in **`Qt Creator`**
+
 
 ## Pathfinding Algorithms
 The algorithms implemented here are the following:
