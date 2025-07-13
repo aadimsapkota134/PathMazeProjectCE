@@ -115,6 +115,8 @@ QString PathAlgorithm::algorithmToString(ALGOS algo) {
     case DIJKSTRA: return "DIJKSTRA";
     case ASTAR: return "ASTAR";
     case BACKTRACK: return "BACKTRACK";
+    case PRIMS: return "PRIMS";
+    case KRUSKAL: return "KRUSKAL";
     case NOALGO: return "NOALGO";
     default: return "UNKNOWN_ALGO";
     }
@@ -154,7 +156,7 @@ void PathAlgorithm::runAlgorithm(ALGOS algorithm)
     simulationOnGoing=true;
     running=true;
     qDebug() << "PathAlgorithm: runAlgorithm called. Thread ID:" << QThread::currentThreadId();
-
+    lastUsedAlgorithm=algorithm;
     switch (algorithm) {
     case BFS:
         futureOutput = QtConcurrent::run(&pool, &PathAlgorithm::performBFSAlgorithm, this);

@@ -87,11 +87,16 @@ public: Q_SIGNALS:
 
     void algorithmCompleted(); // Emitted after visualization (e.g., for maze)
     void pathfindingSearchCompleted(int nodesVisited, int pathLength); // <--- NEW SIGNAL: Emitted when path is found, before visualization
-private:
+public:
     // Helper functions
     void addFrontierCells(Node* node, std::vector<Node*>& frontier);
+    ALGOS lastUsedAlgorithm;
     std::vector<Node*> getMazeNeighbors(Node* node);
     void connectNodes(Node* a, Node* b);
+ALGOS getLastUsedAlgorithm()  const
+    {
+    return lastUsedAlgorithm;
+    }
 public:
 
     ALGOS currentAlgorithm;
@@ -109,7 +114,7 @@ public:
     QThreadPool pool;
     QFuture<int> futureOutput;
 public:
-   QString algorithmToString(ALGOS algo);
+   static QString algorithmToString(ALGOS algo);
 public:
     //  new method to update to grids:
     void setGridNodes(const grid& newGridNodes, int width, int height);

@@ -9,6 +9,7 @@
 #include "mainWindow.h"
 #include "ui_mainWindow.h"
 #include "GridView.h"
+#include "PathAlgorithm.h"
 
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow), gridView(30, 30, 19), pathAlgorithm()
@@ -119,7 +120,21 @@ void MainWindow::onPathfindingSearchCompleted(int nodesVisited, int pathLength)
 
     // Create a new AlgorithmComparisonData entry
     AlgorithmComparisonData data;
-    data.algorithmName = ui->algorithmsBox->currentText(); // Get the name of the selected algorithm
+    int algo = pathAlgorithm.getLastUsedAlgorithm(); // <-- Add a new variable to track the last used
+
+    if (algo == BACKTRACK) {
+        data.algorithmName = "Recursive Backtracker (Easy Maze)";
+    } else if (algo == PRIMS) {
+        data.algorithmName = "Prims Algorithm (Medium Maze)";
+    } else if (algo == KRUSKAL) {
+        data.algorithmName = "Kruskal's Algorithm (Hard Maze)";
+    } else if (algo != NOALGO) {
+        data.algorithmName = ui->algorithmsBox->itemText(algo);
+    } else {
+        data.algorithmName = "Unknown Algorithm";
+    }
+
+
     data.timeElapsedMs = totalElapsedTime;
     data.nodesVisited = nodesVisited;
     data.pathLength = pathLength;
