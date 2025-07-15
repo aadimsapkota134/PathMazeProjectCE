@@ -36,7 +36,7 @@ Users can select difficulty levels: `easy`, `medium`, or `hard`. Each maps to a 
   - Number of visited nodes
   - Time taken to find path
   - Grid size  
-  Results are exported to a **`.csv`** file for external analysis.
+  Results are exported to a **`.csv`** file for possible external analysis in the future.
 
 ## GUI Overview
 
