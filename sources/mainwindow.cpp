@@ -138,6 +138,8 @@ void MainWindow::onPathfindingSearchCompleted(int nodesVisited, int pathLength)
         data.algorithmName = "Prims Algorithm (Medium Maze)";
     } else if (pathAlgorithm.getCurrentAlgorithm() == KRUSKAL) {
         data.algorithmName = "Kruskal's Algorithm (Hard Maze)";
+    } else if (pathAlgorithm.getCurrentAlgorithm() == WILSONS) {
+        data.algorithmName = "Wilson's Algorithm (Extreme Maze)";
     } else {
         // For pathfinding algorithms, use the combobox text
         data.algorithmName = ui->algorithmsBox->currentText();
