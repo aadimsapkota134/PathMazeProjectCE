@@ -786,3 +786,4 @@ void PathAlgorithm::FillNeighboursNode(Node& node)
         node.neighbours.push_back(&(gridNodes.Nodes[northIndex]));
     }
 }
+

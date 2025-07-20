@@ -1,0 +1,10 @@
+release/GridView.o
+release/MazeGenerator.o
+release/PathAlgorithm.o
+release/PlayerMazeWindow.o
+release/main.o
+release/mainWindow.o
+release/moc_GridView.o
+release/moc_PathAlgorithm.o
+release/moc_PlayerMazeWindow.o
+release/moc_mainWindow.o

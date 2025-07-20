@@ -1,0 +1,10 @@
+debug/GridView.o
+debug/MazeGenerator.o
+debug/PathAlgorithm.o
+debug/PlayerMazeWindow.o
+debug/main.o
+debug/mainWindow.o
+debug/moc_GridView.o
+debug/moc_PathAlgorithm.o
+debug/moc_PlayerMazeWindow.o
+debug/moc_mainWindow.o

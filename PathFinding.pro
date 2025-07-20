@@ -6,12 +6,14 @@ SOURCES += \
     sources/GridView.cpp \
     sources/MazeGenerator.cpp \
     sources/PathAlgorithm.cpp \
+    sources/PlayerMazeWindow.cpp \
     sources/main.cpp \
     sources/mainWindow.cpp
 
 HEADERS += \
     headers/GridView.h \
     headers/PathAlgorithm.h \
+    headers/PlayerMazeWindow.h \
     headers/mainWindow.h
 
 FORMS += \
