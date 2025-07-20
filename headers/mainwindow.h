@@ -7,11 +7,13 @@
 #include <QElapsedTimer>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QPushButton> // Includes QPushButton for the new button
 #include "GridView.h"
 #include "PathAlgorithm.h"
 #include "qlabel.h"
 #include <QFile>
 #include <QTextStream>
+#include "PlayerMazeWindow.h" // Includes the new player maze window
 
 QT_BEGIN_NAMESPACE
 
@@ -21,7 +23,6 @@ class MainWindow;
 }
 
 QT_END_NAMESPACE
-
 
 
 //structure to hold comparison data for each algorithm run
@@ -97,6 +98,12 @@ private slots:
     // Slot to receive and process extracted maze features (and predict difficulty)
     void extractAndExportMazeFeatures(int nodesVisited, int pathLength);
 
+    // Slot for the "Play Yourself" button
+    void on_playYourselfButton_clicked();
+    // Slot to handle game finished signal from PlayerMazeWindow
+    void onPlayerMazeGameFinished(bool won);
+
+
 private:
     Ui::MainWindow* ui;
     GridView gridView;
@@ -113,5 +120,10 @@ private:
 
     // Function to update the QTableWidget with all current data
     void updateComparisonTable();
+
+    QPushButton* playYourselfButton; // Declare the new button
+    PlayerMazeWindow* playerMazeWindow; // Pointer to the player maze window
+
+    bool mazeCurrentlyGenerated; //Flag to track if a maze is generated
 };
 #endif // MAINWINDOW_H
