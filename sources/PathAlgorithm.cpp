@@ -115,8 +115,6 @@ QString PathAlgorithm::algorithmToString(ALGOS algo) {
     case DIJKSTRA: return "DIJKSTRA";
     case ASTAR: return "ASTAR";
     case BACKTRACK: return "BACKTRACK";
-    case PRIMS: return "PRIMS";
-    case KRUSKAL: return "KRUSKAL";
     case NOALGO: return "NOALGO";
     default: return "UNKNOWN_ALGO";
     }
@@ -156,7 +154,7 @@ void PathAlgorithm::runAlgorithm(ALGOS algorithm)
     simulationOnGoing=true;
     running=true;
     qDebug() << "PathAlgorithm: runAlgorithm called. Thread ID:" << QThread::currentThreadId();
-    lastUsedAlgorithm=algorithm;
+
     switch (algorithm) {
     case BFS:
         futureOutput = QtConcurrent::run(&pool, &PathAlgorithm::performBFSAlgorithm, this);
@@ -178,6 +176,9 @@ void PathAlgorithm::runAlgorithm(ALGOS algorithm)
         break;
     case KRUSKAL:
         futureOutput = QtConcurrent::run(&pool, &PathAlgorithm::performKruskalsMazeAlgorithm, this);
+        break;
+    case WILSONS:
+        futureOutput = QtConcurrent::run(&pool, &PathAlgorithm::performWilsonsAlgorithm, this);
         break;
     case NOALGO:
         std::cerr <<"NO ALGO \n";
@@ -627,42 +628,46 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
         return;
     }
 
-    // Reset node properties for a new run
-    for(Node& node: gridNodes.Nodes)
-    {
+    for (Node& node : gridNodes.Nodes) {
         node.neighbours.clear();
-        FillNeighboursNode(node);
-        node.globalGoal     = INFINITY;
-        node.localGoal      = INFINITY;
-        node.parent         = nullptr;
-        node.visited        = false; // Reset visited flag
+        FillNeighboursNode(node); // Keep only if topology changes between runs
+        node.globalGoal = std::numeric_limits<float>::infinity();
+        node.localGoal = std::numeric_limits<float>::infinity();
+        node.parent = nullptr;
+        node.visited = false; // Retained for visualization only
+        node.nextUp = false;
     }
 
-    auto distance = [](Node* a, Node* b)
-    {
-        return sqrtf(   (a->xCoord - b->xCoord) * (a->xCoord - b->xCoord)
-                     +(a->yCoord - b->yCoord) * (a->yCoord - b->yCoord));
+    auto distance = [](Node* a, Node* b) {
+        float dx = a->xCoord - b->xCoord;
+        float dy = a->yCoord - b->yCoord;
+        return std::sqrt(dx * dx + dy * dy);
     };
 
-    // Improved heuristic for 4-directional grid: Manhattan Distance
-    auto heuristic = [](Node* a, Node* b){
-        return fabsf(a->xCoord - b->xCoord) + fabsf(a->yCoord - b->yCoord);
+    auto heuristic = [](Node* a, Node* b) {
+        return std::fabs(a->xCoord - b->xCoord) + std::fabs(a->yCoord - b->yCoord);
     };
 
-    Node* nodeStart = &(gridNodes.Nodes[gridNodes.startIndex]);
-    Node* nodeEnd = &(gridNodes.Nodes[gridNodes.endIndex]);
+    Node* nodeStart = &gridNodes.Nodes[gridNodes.startIndex];
+    Node* nodeEnd = &gridNodes.Nodes[gridNodes.endIndex];
 
     nodeStart->localGoal = 0.0f;
     nodeStart->globalGoal = heuristic(nodeStart, nodeEnd);
 
-    // Use std::priority_queue for A*
+    struct CompareNodesAStar {
+        bool operator()(const Node* a, const Node* b) const {
+            if (a->globalGoal == b->globalGoal)
+                return a->globalGoal + a->localGoal > b->globalGoal + b->localGoal;
+            return a->globalGoal > b->globalGoal;
+        }
+    };
+
     std::priority_queue<Node*, std::vector<Node*>, CompareNodesAStar> nodesToTest;
     nodesToTest.push(nodeStart);
 
-    int nodesVisitedCount = 0; // Counter for visited nodes
+    int nodesVisitedCount = 0;
 
-    while(!nodesToTest.empty())
-    {
+    while (!nodesToTest.empty()) {
         promise.suspendIfRequested();
         if (promise.isCanceled()) {
             qDebug() << "AStar: Algorithm cancelled during loop.";
@@ -673,65 +678,54 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
         Node* nodeCurrent = nodesToTest.top();
         nodesToTest.pop();
 
-        // If this node has already been visited (meaning we found a shorter path to it earlier), skip it.
-        if (nodeCurrent->visited) {
+        if (nodeCurrent->globalGoal < nodeCurrent->localGoal)
             continue;
-        }
 
-        nodeCurrent->visited = true; // Mark as visited after extracting from PQ
-        nodesVisitedCount++; // Increment when a node is processed (removed from open list)
+        nodesVisitedCount++;
 
         int indexCurrent = coordToIndex(nodeCurrent->xCoord, nodeCurrent->yCoord, widthGrid);
-        if (indexCurrent != gridNodes.startIndex && indexCurrent != gridNodes.endIndex) {
+        if (indexCurrent != gridNodes.startIndex && indexCurrent != gridNodes.endIndex)
             emit updatedScatterGridView(VISIT, indexCurrent);
-        }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+        if (speedVisualization > 0)
+            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
 
-        if (nodeCurrent == nodeEnd) { // Goal reached
+        if (nodeCurrent == nodeEnd)
             break;
-        }
 
-        for (Node* nodeNeighbour: nodeCurrent->neighbours)
-        {
-            if(!nodeNeighbour->obstacle) // Only consider non-obstacle neighbors
-            {
-                float potentialLowerGoal = nodeCurrent->localGoal + distance(nodeCurrent, nodeNeighbour);
-                if (potentialLowerGoal < nodeNeighbour->localGoal){
-                    nodeNeighbour->parent = nodeCurrent;
-                    nodeNeighbour->localGoal = potentialLowerGoal;
-                    nodeNeighbour->globalGoal = nodeNeighbour->localGoal + heuristic(nodeNeighbour, nodeEnd);
+        for (Node* nodeNeighbour : nodeCurrent->neighbours) {
+            if (nodeNeighbour->obstacle)
+                continue;
 
-                    // Always push to PQ if a better path is found, even if potentially "visited" by a longer path
-                    nodesToTest.push(nodeNeighbour);
+            float potentialLowerGoal = nodeCurrent->localGoal + distance(nodeCurrent, nodeNeighbour);
 
-                    // Only emit NEXT if it's not the end node and it hasn't been visited in a finalized path yet
-                    if (!nodeNeighbour->visited && nodeNeighbour != nodeEnd) {
-                        emit updatedScatterGridView(NEXT, coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid));
-                    }
-                }
+            if (potentialLowerGoal < nodeNeighbour->localGoal) {
+                nodeNeighbour->parent = nodeCurrent;
+                nodeNeighbour->localGoal = potentialLowerGoal;
+                nodeNeighbour->globalGoal = potentialLowerGoal + heuristic(nodeNeighbour, nodeEnd);
+                nodesToTest.push(nodeNeighbour);
+
+                if (nodeNeighbour != nodeEnd)
+                    emit updatedScatterGridView(NEXT, coordToIndex(nodeNeighbour->xCoord, nodeNeighbour->yCoord, widthGrid));
             }
         }
     }
 
     int pathLength = 0;
-    if (nodeEnd->parent != nullptr){ // Path found
-        // Path reconstruction and pathLength calculation
+    if (nodeEnd->parent != nullptr) {
         std::vector<int> pathIndices;
         Node* currentPathNode = nodeEnd;
         while (currentPathNode != nullptr) {
             pathIndices.insert(pathIndices.begin(), coordToIndex(currentPathNode->xCoord, currentPathNode->yCoord, widthGrid));
             currentPathNode = currentPathNode->parent;
         }
-        pathLength = pathIndices.size() > 0 ? pathIndices.size() - 1 : 0;
-
+        pathLength = std::max(0, (int)pathIndices.size() - 1);
         emit pathfindingSearchCompleted(nodesVisitedCount, pathLength);
         qDebug() << "AStar: Pathfinding search completed. Emitting pathfindingSearchCompleted()";
 
-        // Visualization of the path
         emit updatedLineGridView(QPointF(nodeEnd->xCoord, nodeEnd->yCoord), true, true);
 
-        for (size_t i = pathIndices.size() - 1; i > 0; --i) { // Iterate from goal back to start (excluding start)
+        for (size_t i = pathIndices.size() - 1; i > 0; --i) {
             promise.suspendIfRequested();
             if (promise.isCanceled()) {
                 qDebug() << "AStar: Algorithm cancelled during visualization.";
@@ -740,20 +734,20 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
             int pathNodeIndex = pathIndices[i];
             emit updatedScatterGridView(PATH, pathNodeIndex);
             emit updatedLineGridView(QPointF(gridNodes.Nodes[pathNodeIndex].xCoord, gridNodes.Nodes[pathNodeIndex].yCoord), true, false);
-            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+            if (speedVisualization > 0)
+                std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
         }
-        emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
 
-    }else{ // No path found
+        emit updatedLineGridView(QPointF(gridNodes.Nodes[gridNodes.startIndex].xCoord, gridNodes.Nodes[gridNodes.startIndex].yCoord), true, false);
+    } else {
         endReached = false;
         emit pathfindingSearchCompleted(nodesVisitedCount, 0);
         qDebug() << "AStar: Pathfinding search not found. Emitting pathfindingSearchCompleted()";
     }
 
-    // Reset visited flags for next run
-    for(Node& node: gridNodes.Nodes) {
+    for (Node& node : gridNodes.Nodes) {
         node.visited = false;
-        node.nextUp = false; // Not strictly used in A*, but good to reset
+        node.nextUp = false;
     }
 
     emit algorithmCompleted();
@@ -761,8 +755,6 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
 }
 
 // Maze generation
-
-
 void PathAlgorithm::FillNeighboursNode(Node& node)
 {
 

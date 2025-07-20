@@ -417,3 +417,147 @@ bool unionSet(int a ,int b,std::vector<int> &parent,std::vector<int>& rank)
     return false;
 
 }
+void PathAlgorithm::performWilsonsAlgorithm(QPromise<int>& promise)
+{
+    qDebug() << "Maze: Wilson's Algorithm started in worker thread:" << QThread::currentThreadId();
+    promise.suspendIfRequested();
+    if (promise.isCanceled()) {
+        emit pathfindingSearchCompleted(0, 0);
+        return;
+    }
+
+    // Initialize all nodes as obstacles
+    for (int index = 0; index < widthGrid * heightGrid; index++) {
+        promise.suspendIfRequested();
+        if (promise.isCanceled()) {
+            qDebug() << "Maze: Algorithm cancelled during init.";
+            emit pathfindingSearchCompleted(0, 0);
+            return;
+        }
+
+        gridNodes.Nodes[index].obstacle = true;
+        gridNodes.Nodes[index].visited = false;
+        emit updatedScatterGridView(FREETOOBSTACLE, index);
+    }
+
+    // Create a set of unvisited nodes (only odd coordinates for proper maze generation)
+    std::set<int> unvisited;
+    for (int y = 1; y <= heightGrid; y += 2) {
+        for (int x = 1; x <= widthGrid; x += 2) {
+            unvisited.insert(coordToIndex(x, y, widthGrid));
+        }
+    }
+
+    // Choose random starting cell
+    auto it = unvisited.begin();
+    std::advance(it, rand() % unvisited.size());
+    int initialIndex = *it;
+    unvisited.erase(it);
+
+    gridNodes.Nodes[initialIndex].obstacle = false;
+    gridNodes.Nodes[initialIndex].visited = true;
+    emit updatedScatterGridView(OBSTACLETOFREE, initialIndex);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    while (!unvisited.empty()) {
+        promise.suspendIfRequested();
+        if (promise.isCanceled()) {
+            qDebug() << "Maze: Algorithm cancelled during loop.";
+            emit pathfindingSearchCompleted(0, 0);
+            return;
+        }
+
+        // Pick random unvisited cell
+        it = unvisited.begin();
+        std::advance(it, rand() % unvisited.size());
+        int startIndex = *it;
+        Node* current = &gridNodes.Nodes[startIndex];
+
+        // Perform loop-erased random walk
+        std::map<int, int> parent; // child -> parent mapping
+        std::set<int> walkVisited;
+        parent[startIndex] = startIndex;
+        walkVisited.insert(startIndex);
+
+        while (unvisited.count(coordToIndex(current->xCoord, current->yCoord, widthGrid))) {
+            std::vector<std::pair<int, int>> directions;
+            int x = current->xCoord;
+            int y = current->yCoord;
+
+            if (x + 2 <= widthGrid) directions.emplace_back(2, 0);
+            if (x - 2 >= 1) directions.emplace_back(-2, 0);
+            if (y + 2 <= heightGrid) directions.emplace_back(0, 2);
+            if (y - 2 >= 1) directions.emplace_back(0, -2);
+
+            if (directions.empty()) break;
+
+            auto [dx, dy] = directions[rand() % directions.size()];
+            int nextX = x + dx;
+            int nextY = y + dy;
+            int nextIndex = coordToIndex(nextX, nextY, widthGrid);
+
+            if (walkVisited.count(nextIndex)) {
+                int loopStart = nextIndex;
+                int currentIndex = coordToIndex(current->xCoord, current->yCoord, widthGrid);
+                while (currentIndex != loopStart) {
+                    walkVisited.erase(currentIndex);
+                    currentIndex = parent[currentIndex];
+                    current = &gridNodes.Nodes[currentIndex];
+                }
+            } else {
+                parent[nextIndex] = coordToIndex(current->xCoord, current->yCoord, widthGrid);
+                walkVisited.insert(nextIndex);
+                current = &gridNodes.Nodes[nextIndex];
+            }
+
+            if (!gridNodes.Nodes[nextIndex].obstacle) {
+                break;
+            }
+        }
+
+        // Carve the path
+        std::vector<int> pathIndices;
+        int pathIndex = coordToIndex(current->xCoord, current->yCoord, widthGrid);
+        while (parent[pathIndex] != pathIndex) {
+            pathIndices.push_back(pathIndex);
+            pathIndex = parent[pathIndex];
+        }
+        pathIndices.push_back(pathIndex);
+
+        for (size_t i = pathIndices.size() - 1; i > 0; i--) {
+            int currentIdx = pathIndices[i];
+            int nextIdx = pathIndices[i - 1];
+
+            Node& currentNode = gridNodes.Nodes[currentIdx];
+            Node& nextNode = gridNodes.Nodes[nextIdx];
+
+            int wallX = (currentNode.xCoord + nextNode.xCoord) / 2;
+            int wallY = (currentNode.yCoord + nextNode.yCoord) / 2;
+            int wallIdx = coordToIndex(wallX, wallY, widthGrid);
+
+            currentNode.obstacle = false;
+            nextNode.obstacle = false;
+            gridNodes.Nodes[wallIdx].obstacle = false;
+
+            unvisited.erase(currentIdx);
+            unvisited.erase(nextIdx);
+
+            emit updatedScatterGridView(OBSTACLETOFREE, currentIdx);
+            emit updatedScatterGridView(OBSTACLETOFREE, nextIdx);
+            emit updatedScatterGridView(OBSTACLETOFREE, wallIdx);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(speedVisualization));
+        }
+    }
+
+    // Reset visited flags (nextUp is not used here)
+    for (Node& node : gridNodes.Nodes) {
+        node.visited = false;
+        node.nextUp = false;
+    }
+
+    emit algorithmCompleted();
+    emit pathfindingSearchCompleted(0, 0);
+    qDebug() << "Maze: Wilson's Algorithm completed (maze only — no pathfinding)";
+}

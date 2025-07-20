@@ -18,7 +18,7 @@ QT_USE_NAMESPACE
 typedef enum {EMPTY, MAZE, NOARRANG} ARRANGEMENTS;
 
 // Possible Algorithm chosen in the Algorithm Box
-typedef enum {BFS, DFS, DIJKSTRA, ASTAR,BACKTRACK,PRIMS,KRUSKAL, NOALGO} ALGOS;
+typedef enum {BFS, DFS, DIJKSTRA, ASTAR,BACKTRACK,PRIMS,KRUSKAL,WILSONS, NOALGO} ALGOS;
 
 // Possible update in the grid view from the Path Algorithm
 typedef enum {CURRENT, FREE, VISIT, OBSTACLETOFREE, FREETOOBSTACLE, NEXT, PATH, LINE} UPDATETYPES;

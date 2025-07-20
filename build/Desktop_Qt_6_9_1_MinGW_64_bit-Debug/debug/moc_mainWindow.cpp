@@ -65,7 +65,10 @@ template <> constexpr inline auto MainWindow::qt_create_metaobjectdata<qt_meta_t
         "algorithmEnum",
         "on_clearComparisonButton_clicked",
         "on_deleteSelectedRowButton_clicked",
-        "extractAndExportMazeFeatures"
+        "extractAndExportMazeFeatures",
+        "on_playYourselfButton_clicked",
+        "onPlayerMazeGameFinished",
+        "won"
     };
 
     QtMocHelpers::UintData qt_methods {
@@ -125,6 +128,12 @@ template <> constexpr inline auto MainWindow::qt_create_metaobjectdata<qt_meta_t
         QtMocHelpers::SlotData<void(int, int)>(26, 2, QMC::AccessPrivate, QMetaType::Void, {{
             { QMetaType::Int, 10 }, { QMetaType::Int, 11 },
         }}),
+        // Slot 'on_playYourselfButton_clicked'
+        QtMocHelpers::SlotData<void()>(27, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onPlayerMazeGameFinished'
+        QtMocHelpers::SlotData<void(bool)>(28, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Bool, 29 },
+        }}),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -167,6 +176,8 @@ void MainWindow::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, 
         case 16: _t->on_clearComparisonButton_clicked(); break;
         case 17: _t->on_deleteSelectedRowButton_clicked(); break;
         case 18: _t->extractAndExportMazeFeatures((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<int>>(_a[2]))); break;
+        case 19: _t->on_playYourselfButton_clicked(); break;
+        case 20: _t->onPlayerMazeGameFinished((*reinterpret_cast< std::add_pointer_t<bool>>(_a[1]))); break;
         default: ;
         }
     }
@@ -191,14 +202,14 @@ int MainWindow::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 19)
+        if (_id < 21)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 19;
+        _id -= 21;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 19)
+        if (_id < 21)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 19;
+        _id -= 21;
     }
     return _id;
 }

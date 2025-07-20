@@ -1,4 +1,3 @@
-#include <iostream> // Consider removing if not directly used for std::cout/cin
 #include <QChartView>
 #include<QPushButton>
 #include <QMessageBox>
@@ -9,7 +8,6 @@
 #include "mainWindow.h"
 #include "ui_mainWindow.h"
 #include "GridView.h"
-#include "PathAlgorithm.h"
 
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow), gridView(30, 30, 19), pathAlgorithm()
@@ -100,6 +98,16 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     QPushButton* deleteRowButton = new QPushButton("Delete Selected Row", this);
     ui->verticalLayout_2->addWidget(deleteRowButton); // in the comparisonTab's vertical layout
     connect(deleteRowButton, &QPushButton::clicked, this, &MainWindow::on_deleteSelectedRowButton_clicked);
+
+    // NEW: "Play Yourself" button setup
+    playYourselfButton = new QPushButton("Play Yourself", this);
+    // Assuming you have a layout in your UI where you want to add this button, e.g., ui->hLayout or a new layout
+    // For demonstration, let's add it to the existing hLayout next to the time display.
+    ui->hLayout->addWidget(playYourselfButton);
+    connect(playYourselfButton, &QPushButton::clicked, this, &MainWindow::on_playYourselfButton_clicked);
+
+    playerMazeWindow = nullptr; // Initialize pointer to null
+    mazeCurrentlyGenerated = false; // NEW: Initialize the maze generated flag
 }
 
 
@@ -107,7 +115,10 @@ MainWindow::~MainWindow() //destructor
 {
     delete ui;
     delete animationTimer; // Clean up timer
-    // timeDisplayLabel is a child of centralWidget, so it will be deleted automatically
+    if (playerMazeWindow) { // Clean up playerMazeWindow if it exists
+        delete playerMazeWindow;
+    }
+    // timeDisplayLabel and playYourselfButton are children of centralWidget, so they will be deleted automatically
 }
 
 void MainWindow::onPathfindingSearchCompleted(int nodesVisited, int pathLength)
@@ -120,21 +131,17 @@ void MainWindow::onPathfindingSearchCompleted(int nodesVisited, int pathLength)
 
     // Create a new AlgorithmComparisonData entry
     AlgorithmComparisonData data;
-    int algo = pathAlgorithm.getLastUsedAlgorithm(); // <-- Add a new variable to track the last used
-
-    if (algo == BACKTRACK) {
+    // Determine the correct algorithm name based on the currently running algorithm type
+    if (pathAlgorithm.getCurrentAlgorithm() == BACKTRACK) {
         data.algorithmName = "Recursive Backtracker (Easy Maze)";
-    } else if (algo == PRIMS) {
+    } else if (pathAlgorithm.getCurrentAlgorithm() == PRIMS) {
         data.algorithmName = "Prims Algorithm (Medium Maze)";
-    } else if (algo == KRUSKAL) {
+    } else if (pathAlgorithm.getCurrentAlgorithm() == KRUSKAL) {
         data.algorithmName = "Kruskal's Algorithm (Hard Maze)";
-    } else if (algo != NOALGO) {
-        data.algorithmName = ui->algorithmsBox->itemText(algo);
     } else {
-        data.algorithmName = "Unknown Algorithm";
+        // For pathfinding algorithms, use the combobox text
+        data.algorithmName = ui->algorithmsBox->currentText();
     }
-
-
     data.timeElapsedMs = totalElapsedTime;
     data.nodesVisited = nodesVisited;
     data.pathLength = pathLength;
@@ -317,6 +324,7 @@ void MainWindow::on_mazeButton_clicked()
     QPushButton *easyButton = msgBox.addButton(tr("Easy"), QMessageBox::AcceptRole);
     QPushButton *mediumButton = msgBox.addButton(tr("Medium"), QMessageBox::AcceptRole);
     QPushButton *hardButton = msgBox.addButton(tr("Hard"), QMessageBox::AcceptRole);
+    QPushButton *extremebutton = msgBox.addButton(tr("Extreme"), QMessageBox::AcceptRole);
     QPushButton *cancelButton = msgBox.addButton(QMessageBox::Cancel);
 
     msgBox.exec();
@@ -327,14 +335,20 @@ void MainWindow::on_mazeButton_clicked()
         generateMazeWithAlgorithm(PRIMS);
     } else if (msgBox.clickedButton() == hardButton) {
         generateMazeWithAlgorithm(KRUSKAL);
-    } else if(msgBox.clickedButton()==cancelButton) {
+    }
+    else if (msgBox.clickedButton() == extremebutton) {
+        generateMazeWithAlgorithm(WILSONS);
+    }
+    else if(msgBox.clickedButton()==cancelButton) {
         // Cancel clicked — do nothing
         return;
     }
 }
 void MainWindow::generateMazeWithAlgorithm(int algorithmEnum)
 {
-    gridView.setCurrentAlgorithm(algorithmEnum);
+    pathAlgorithm.setCurrentAlgorithm(static_cast<ALGOS>(algorithmEnum)); // Set for PathAlgorithm
+    gridView.setCurrentAlgorithm(algorithmEnum); // Set for GridView (for internal logic if needed)
+
     pathAlgorithm.running = true;
     pathAlgorithm.simulationOnGoing = true;
 
@@ -351,10 +365,9 @@ void MainWindow::generateMazeWithAlgorithm(int algorithmEnum)
     animationTimer->start();
 
     pathAlgorithm.runAlgorithm(static_cast<ALGOS>(algorithmEnum));
-    //Reset the algorithm so pathfinding doesn't rerun maze generation
-    pathAlgorithm.setCurrentAlgorithm(NOALGO);
-    gridView.setCurrentAlgorithm(NOALGO);
-
+    //Reset the algorithm so pathfinding doesn't rerun maze generation.This reset should ideally happen AFTER onPathfindingSearchCompleted has processed the signal
+    // pathAlgorithm.setCurrentAlgorithm(NOALGO);
+    // gridView.setCurrentAlgorithm(NOALGO);
 }
 
 
@@ -381,7 +394,7 @@ void MainWindow::on_resetButton_clicked()
     // Reset button text for run button
     ui->runButton->setText("Start PathFinding");
 
-
+    mazeCurrentlyGenerated = false; // NEW: Reset the flag on grid reset
 
 
     // Stop timers and reset display
@@ -416,6 +429,13 @@ void MainWindow::onAlgorithmCompleted()
     ui->runButton->setChecked(false);
     ui->runButton->setText(QString("Start PathFinding")); // Consistent initial text
 
+    // If the completed algorithm was a maze generation algorithm, set the flag
+    if (pathAlgorithm.getCurrentAlgorithm() == BACKTRACK ||
+        pathAlgorithm.getCurrentAlgorithm() == PRIMS ||
+        pathAlgorithm.getCurrentAlgorithm() == KRUSKAL) {
+        mazeCurrentlyGenerated = true; // NEW: Set flag to true after maze generation
+    }
+
     // gridView.setCurrentAlgorithm(ui->algorithmsBox->currentIndex());
 
 
@@ -447,16 +467,6 @@ void MainWindow::extractAndExportMazeFeatures(int nodesVisited, int pathLength) 
     currentData.numDeadEnds = currentNumDeadEnds;
     currentData.branchingFactor = currentBranchingFactor;
     currentData.gridSize = currentGridSize; // Ensure gridSize is updated here as well
-
-    // If it was a maze generation, ensure the algorithm name is correctly set
-    if (gridView.getCurrentAlgorithm() == BACKTRACK) {
-        currentData.algorithmName = "Maze Generation";
-        // For maze generation, nodesVisited and pathLength from the signal are 0.
-        // If these were populated by onPathfindingSearchCompleted, keep them as 0.
-        currentData.nodesVisited = nodesVisited;
-        currentData.pathLength = pathLength;
-    }
-
     // After adding/updating data in comparisonDataList, refresh the table
     updateComparisonTable();
 
@@ -497,8 +507,8 @@ void MainWindow::exportFeaturesToCSV(const AlgorithmComparisonData& dataToExport
                << dataToExport.gridSize << ","
                << QString::number(dataToExport.wallDensity, 'f', 4) << ","
                << dataToExport.numDeadEnds << ","
-               << QString::number(dataToExport.branchingFactor, 'f', 4);
-         file.close();
+               << QString::number(dataToExport.branchingFactor, 'f', 4) << "\n";
+        file.close();
         qDebug() << "Maze features appended to maze_data.csv successfully.";
     } else {
         qWarning() << "Could not open maze_data.csv for appending data. Error:" << file.errorString();
@@ -543,6 +553,7 @@ void MainWindow::on_dialWidth_sliderReleased()
 
     // Resetting the gridview
     gridView.populateGridMap(gridView.getCurrentArrangement(), true);
+    mazeCurrentlyGenerated = false; // NEW: Reset flag if grid dimensions change
 }
 
 
@@ -553,6 +564,7 @@ void MainWindow::on_dialHeight_sliderReleased()
 
     // Resetting the gridview
     gridView.populateGridMap(gridView.getCurrentArrangement(), true);
+    mazeCurrentlyGenerated = false; // NEW: Reset flag if grid dimensions change
 
 }
 
@@ -593,4 +605,74 @@ void MainWindow::on_deleteSelectedRowButton_clicked()
         comparisonDataList.removeAt(rowToDelete); // Also remove from internal data list
     }
     QMessageBox::information(this, "Delete Row", "Selected row(s) deleted.");
+}
+
+// NEW: Implementation for "Play Yourself" button click
+void MainWindow::on_playYourselfButton_clicked()
+{
+    // Ensure no algorithm simulation is running
+    if (pathAlgorithm.simulationOnGoing) {
+        QMessageBox::warning(this, "Warning", "Please stop the current simulation before playing yourself.");
+        return;
+    }
+
+    // Check if a maze has been generated
+    if (!mazeCurrentlyGenerated) {
+        QMessageBox::information(this, "Information", "Please generate a maze first using the 'Generate Maze' button.");
+        return;
+    }
+
+    // Create the PlayerMazeWindow, passing the current maze state
+    playerMazeWindow = new PlayerMazeWindow(gridView.gridNodes,
+                                            gridView.widthGrid,
+                                            gridView.heightGrid,
+                                            gridView.gridNodes.startIndex,
+                                            gridView.gridNodes.endIndex,
+                                            this); // Set MainWindow as parent
+
+    // Connect the gameFinished signal from PlayerMazeWindow
+    connect(playerMazeWindow, &PlayerMazeWindow::gameFinished, this, &MainWindow::onPlayerMazeGameFinished);
+
+    // MODIFICATION FOR SIDE-BY-SIDE DISPLAY
+    // Instead of hiding the main window, we position the new window next to it.
+    // this->hide();
+
+    // Get the current geometry of the main window
+    QRect mainWindowGeometry = this->geometry();
+
+    // Calculate the desired position for the new window (e.g., to its right)
+    // You might need to adjust the offset based on your screen size and window sizes
+    int newWindowX = mainWindowGeometry.x();
+    int newWindowY = mainWindowGeometry.y();
+
+    // Set the position of the new window
+    playerMazeWindow->move(newWindowX, newWindowY);
+
+    playerMazeWindow->show(); // Show the player maze window
+    playerMazeWindow->startGame(); // Start the game
+}
+
+// NEW: Slot to handle when the player maze game finishes
+void MainWindow::onPlayerMazeGameFinished(bool won)
+{
+
+    // Clean up the player maze window
+    if (playerMazeWindow) {
+        playerMazeWindow->deleteLater(); // Schedule for deletion
+        playerMazeWindow = nullptr; // Clear the pointer
+    }
+
+    // Optionally, a message based on win/loss
+    if (won) {
+        QMessageBox::information(this, "Congratulations!", "You successfully completed the maze!");
+    } else {
+        QMessageBox::information(this, "Game Over", "You did not complete the maze in time.");
+    }
+
+    // Reset the main grid view to its default state or last algorithm state as needed
+    gridView.setSimulationRunning(false);
+    pathAlgorithm.setSimulationOnGoing(false);
+    pathAlgorithm.running = false;
+    ui->runButton->setChecked(false);
+    ui->runButton->setText(QString("Start PathFinding"));
 }

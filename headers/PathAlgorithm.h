@@ -33,7 +33,7 @@ struct Wall {
 };
 
 bool unionSet(int a ,int b,std::vector<int> &parent,std::vector<int>& rank);
-    int findSet(int x,std::vector<int>& parent);
+int findSet(int x,std::vector<int>& parent);
 class PathAlgorithm : public QObject
 {
 
@@ -74,6 +74,7 @@ public:
     void performPrimsMazeAlgorithm(QPromise<int>& promise);
     //maze generation using kruskal algorithm
     void performKruskalsMazeAlgorithm(QPromise<int>& promise);
+    void performWilsonsAlgorithm(QPromise<int>& promise);
 
     // Retrieving the neighbors of a point in a grid
     std::vector<Node> retrieveNeighborsGrid(const grid& gridNodes, const Node& currentNode, int widthGrid, int heightGrid);
@@ -87,16 +88,11 @@ public: Q_SIGNALS:
 
     void algorithmCompleted(); // Emitted after visualization (e.g., for maze)
     void pathfindingSearchCompleted(int nodesVisited, int pathLength); // <--- NEW SIGNAL: Emitted when path is found, before visualization
-public:
+private:
     // Helper functions
     void addFrontierCells(Node* node, std::vector<Node*>& frontier);
-    ALGOS lastUsedAlgorithm;
     std::vector<Node*> getMazeNeighbors(Node* node);
     void connectNodes(Node* a, Node* b);
-ALGOS getLastUsedAlgorithm()  const
-    {
-    return lastUsedAlgorithm;
-    }
 public:
 
     ALGOS currentAlgorithm;
@@ -114,7 +110,7 @@ public:
     QThreadPool pool;
     QFuture<int> futureOutput;
 public:
-   static QString algorithmToString(ALGOS algo);
+    QString algorithmToString(ALGOS algo);
 public:
     //  new method to update to grids:
     void setGridNodes(const grid& newGridNodes, int width, int height);

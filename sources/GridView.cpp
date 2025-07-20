@@ -429,7 +429,7 @@ void GridView::handleClickedPoint(const QPointF& point)
             // Modyfing StartElement QScatter Series
             startElement->replace(0, clickedPoint);
             if (previousStartGridIndex != gridNodes.endIndex) {
-            freeElements->replace(previousStartGridIndex, previousStartElement);
+                freeElements->replace(previousStartGridIndex, previousStartElement);
             }
             // Ensure the clicked point is removed from free/obstacle elements if it was there
             freeElements->replace(clickedIndex, nullQPoint);
@@ -446,7 +446,7 @@ void GridView::handleClickedPoint(const QPointF& point)
             startElement->replace(0, clickedPoint);
             // If the previous start point was not the end point, convert it to obstacle
             if (previousStartGridIndex != gridNodes.endIndex) {
-            obstacleElements->replace(previousStartGridIndex, previousStartElement);
+                obstacleElements->replace(previousStartGridIndex, previousStartElement);
             }
             // Ensure the clicked point is removed from free/obstacle elements if it was there
             freeElements->replace(clickedIndex, nullQPoint);
