@@ -434,8 +434,9 @@ void MainWindow::onAlgorithmCompleted()
     // If the completed algorithm was a maze generation algorithm, set the flag
     if (pathAlgorithm.getCurrentAlgorithm() == BACKTRACK ||
         pathAlgorithm.getCurrentAlgorithm() == PRIMS ||
-        pathAlgorithm.getCurrentAlgorithm() == KRUSKAL) {
-        mazeCurrentlyGenerated = true; // NEW: Set flag to true after maze generation
+        pathAlgorithm.getCurrentAlgorithm() == KRUSKAL ||
+        pathAlgorithm.getCurrentAlgorithm() == WILSONS) {
+        mazeCurrentlyGenerated = true; //Set flag to true after maze generation
     }
 
     // gridView.setCurrentAlgorithm(ui->algorithmsBox->currentIndex());
