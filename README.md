@@ -20,7 +20,7 @@ Users can select difficulty levels: `easy`, `medium`, or `hard`. Each maps to a 
 - **`easy`**: Recursive Backtracking (DFS)
 - **`medium`**: Prim's Algorithm
 - **`hard`**: Kruskal's Algorithm
-- - **`Extreme`**: Wilson's Algorithm
+- **`Extreme`**: Wilson's Algorithm
 
 <img width="574" height="258" alt="image" src="https://github.com/user-attachments/assets/94f179de-b13b-405e-9062-df7e03dea5c3" />
 
