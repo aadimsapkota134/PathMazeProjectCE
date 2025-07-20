@@ -177,6 +177,9 @@ void PathAlgorithm::runAlgorithm(ALGOS algorithm)
     case KRUSKAL:
         futureOutput = QtConcurrent::run(&pool, &PathAlgorithm::performKruskalsMazeAlgorithm, this);
         break;
+    case WILSONS:
+        futureOutput = QtConcurrent::run(&pool, &PathAlgorithm::performWilsonsAlgorithm, this);
+        break;
     case NOALGO:
         std::cerr <<"NO ALGO \n";
     default:
@@ -638,11 +641,11 @@ void PathAlgorithm::performAStarAlgorithm(QPromise<int>& promise)
     auto distance = [](Node* a, Node* b) {
         float dx = a->xCoord - b->xCoord;
         float dy = a->yCoord - b->yCoord;
-        return std::sqrtf(dx * dx + dy * dy);
+        return std::sqrt(dx * dx + dy * dy);
     };
 
     auto heuristic = [](Node* a, Node* b) {
-        return std::fabsf(a->xCoord - b->xCoord) + std::fabsf(a->yCoord - b->yCoord);
+        return std::fabs(a->xCoord - b->xCoord) + std::fabs(a->yCoord - b->yCoord);
     };
 
     Node* nodeStart = &gridNodes.Nodes[gridNodes.startIndex];
@@ -783,3 +786,4 @@ void PathAlgorithm::FillNeighboursNode(Node& node)
         node.neighbours.push_back(&(gridNodes.Nodes[northIndex]));
     }
 }
+
