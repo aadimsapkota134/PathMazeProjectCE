@@ -324,6 +324,7 @@ void MainWindow::on_mazeButton_clicked()
     QPushButton *easyButton = msgBox.addButton(tr("Easy"), QMessageBox::AcceptRole);
     QPushButton *mediumButton = msgBox.addButton(tr("Medium"), QMessageBox::AcceptRole);
     QPushButton *hardButton = msgBox.addButton(tr("Hard"), QMessageBox::AcceptRole);
+    QPushButton *extremebutton = msgBox.addButton(tr("Extreme"), QMessageBox::AcceptRole);
     QPushButton *cancelButton = msgBox.addButton(QMessageBox::Cancel);
 
     msgBox.exec();
@@ -334,7 +335,11 @@ void MainWindow::on_mazeButton_clicked()
         generateMazeWithAlgorithm(PRIMS);
     } else if (msgBox.clickedButton() == hardButton) {
         generateMazeWithAlgorithm(KRUSKAL);
-    } else if(msgBox.clickedButton()==cancelButton) {
+    }
+    else if (msgBox.clickedButton() == extremebutton) {
+        generateMazeWithAlgorithm(WILSONS);
+    }
+    else if(msgBox.clickedButton()==cancelButton) {
         // Cancel clicked — do nothing
         return;
     }
