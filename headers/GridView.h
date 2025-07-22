@@ -11,8 +11,8 @@
 
 QT_USE_NAMESPACE
 
-    // Possible interactions in the gridview chosen in the Interaction Box
-    typedef enum {START, END, OBST, NOINTERACTION} INTERACTIONS;
+// Possible interactions in the gridview chosen in the Interaction Box
+typedef enum {START, END, OBST, NOINTERACTION} INTERACTIONS;
 
 // Possible grid arrangement chosen in the Maze Box
 typedef enum {EMPTY, MAZE, NOARRANG} ARRANGEMENTS;
